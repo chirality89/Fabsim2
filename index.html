@@ -1,0 +1,1299 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>FabSim</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Barlow:wght@400;500;600&family=Barlow+Condensed:wght@500;600&display=swap" rel="stylesheet">
+<style>
+/* ============================================================
+   THEME TOKENS
+   Palette comes from the fab itself: raised-floor grey,
+   brushed steel, and the amber "yellow room" light of the litho bay.
+   ============================================================ */
+:root{
+  --bg:#E9ECE7; --surface:#F6F7F3; --ink:#1C2326; --muted:#58646A; --line:#D0D6CF;
+  --floor:#DDE2DC; --floor-line:#C6CCC5; --perf:#B6BDB5; --slab-l:#C3C9C2; --slab-r:#AFB6AE;
+  --steel-t:#D8DDDF; --steel-l:#B3BBBF; --steel-r:#939CA1; --steel-edge:#7E878C;
+  --amber:#D99A00; --amber-wash:rgba(242,176,0,.30); --amber-soft:rgba(242,176,0,.14);
+  --cu-wash:rgba(184,115,58,.20); --ok:#2C7A4B; --warn:#9A6200; --bad:#BF372E; --run:#2B68AD; --lamp-off:#8A9398;
+  --sans:'Barlow', system-ui, -apple-system, 'Segoe UI', Roboto, Arial, sans-serif;
+  --cond:'Barlow Condensed', 'Arial Narrow', 'Roboto Condensed', system-ui, sans-serif;
+  color-scheme: light dark;
+  box-sizing:border-box;
+  padding-top:env(safe-area-inset-top,0px);
+  padding-bottom:env(safe-area-inset-bottom,0px);
+}
+@media (prefers-color-scheme: dark){
+  :root:not([data-theme="light"]){
+    --bg:#131819; --surface:#1A2023; --ink:#E2E8E5; --muted:#92A0A5; --line:#2B3437;
+    --floor:#1D2427; --floor-line:#283134; --perf:#2F393D; --slab-l:#161C1E; --slab-r:#101517;
+    --steel-t:#5A666D; --steel-l:#434D53; --steel-r:#333B40; --steel-edge:#252C30;
+    --amber:#F0B21A; --amber-wash:rgba(240,178,26,.17); --amber-soft:rgba(240,178,26,.12);
+    --cu-wash:rgba(200,125,62,.15); --ok:#5CB985; --warn:#E6AA3F; --bad:#EE6B60; --run:#6BA7E6; --lamp-off:#4D575C;
+  }
+}
+:root[data-theme="dark"]{
+  --bg:#131819; --surface:#1A2023; --ink:#E2E8E5; --muted:#92A0A5; --line:#2B3437;
+  --floor:#1D2427; --floor-line:#283134; --perf:#2F393D; --slab-l:#161C1E; --slab-r:#101517;
+  --steel-t:#5A666D; --steel-l:#434D53; --steel-r:#333B40; --steel-edge:#252C30;
+  --amber:#F0B21A; --amber-wash:rgba(240,178,26,.17); --amber-soft:rgba(240,178,26,.12);
+  --cu-wash:rgba(200,125,62,.15); --ok:#5CB985; --warn:#E6AA3F; --bad:#EE6B60; --run:#6BA7E6; --lamp-off:#4D575C;
+}
+html{scroll-padding-top:env(safe-area-inset-top,0px)}
+*,*::before,*::after{box-sizing:inherit}
+body{margin:0;background:var(--bg);color:var(--ink);font:400 15px/1.45 var(--sans);
+  font-variant-numeric:tabular-nums;-webkit-text-size-adjust:100%}
+h2,h3{font-family:var(--cond);font-weight:600;margin:0}
+p{margin:0}
+
+/* ---------- top bar ---------- */
+.bar{position:sticky;top:env(safe-area-inset-top,0px);z-index:5;background:var(--bg);
+  display:flex;flex-wrap:wrap;align-items:center;gap:8px 16px;padding:10px 14px;border-bottom:1px solid var(--line)}
+.brand{font:600 26px/1 var(--cond);margin:0}
+.clock{font:500 17px/1 var(--cond);color:var(--muted)}
+.cash{font:600 22px/1 var(--cond);margin-left:auto}
+.cash.neg{color:var(--bad)}
+.controls{display:flex;gap:8px;align-items:center;width:100%}
+@media(min-width:760px){.controls{width:auto}}
+.seg{display:inline-flex;border:1px solid var(--line);border-radius:8px;overflow:hidden}
+.seg button{border:0;background:transparent;color:var(--ink);font:600 16px/1 var(--cond);
+  padding:10px 12px;min-width:46px;cursor:pointer}
+.seg button[aria-pressed="true"]{background:var(--ink);color:var(--bg)}
+.btn{font:600 16px/1 var(--cond);border-radius:8px;border:1px solid var(--line);background:var(--surface);
+  color:var(--ink);padding:10px 14px;cursor:pointer;min-height:42px}
+.btn.primary{background:var(--ink);color:var(--bg);border-color:var(--ink)}
+.btn.danger{color:var(--bad);border-color:currentColor}
+.btn:disabled{opacity:.4;cursor:not-allowed}
+.btn:focus-visible,.seg button:focus-visible,.lot:focus-visible,.tab:focus-visible{outline:2px solid var(--run);outline-offset:2px}
+.spacer{flex:1}
+
+/* ---------- layout ---------- */
+main{display:grid;max-width:1280px;margin:0 auto}
+@media(min-width:960px){
+  main{grid-template-columns:minmax(0,1.55fr) minmax(340px,1fr);align-items:start}
+  .panel{position:sticky;top:64px;max-height:calc(100vh - 72px);overflow:auto;border-left:1px solid var(--line)}
+}
+.floorwrap{padding:6px 6px 0}
+#floor{display:block;width:100%;height:auto;max-height:64vh;touch-action:manipulation}
+
+/* ---------- isometric floor (SVG) ---------- */
+.floor{fill:var(--floor)}
+.slab-l{fill:var(--slab-l)} .slab-r{fill:var(--slab-r)}
+.tile{stroke:var(--floor-line);stroke-width:1}
+.perf{fill:var(--perf)}
+.yellow-room{fill:var(--amber-wash)}
+.cu-room{fill:var(--cu-wash)}
+.floor-label{font:600 10px var(--cond);fill:var(--muted);opacity:.85;pointer-events:none}
+.layers{display:flex;flex-wrap:wrap;gap:6px;margin:0 0 10px}
+.chip{font:500 14px/1.2 var(--sans);border:1px solid var(--line);background:var(--bg);color:var(--ink);border-radius:999px;padding:7px 12px;cursor:pointer}
+.chip[aria-pressed="true"]{background:var(--ink);color:var(--bg);border-color:var(--ink)}
+.chip:focus-visible{outline:2px solid var(--run);outline-offset:2px}
+.flow{stroke:var(--amber);stroke-width:1.4;stroke-dasharray:3 4;fill:none;opacity:.75}
+.arrowhead{fill:var(--amber)}
+.tool{cursor:pointer;outline:none}
+.f-top{fill:var(--steel-t);stroke:var(--steel-edge);stroke-width:.8}
+.f-l{fill:var(--steel-l);stroke:var(--steel-edge);stroke-width:.8}
+.f-r{fill:var(--steel-r);stroke:var(--steel-edge);stroke-width:.8}
+.window{fill:var(--steel-edge);opacity:.55}
+.face-label{font:600 10px var(--cond);fill:var(--ink);opacity:.8;pointer-events:none}
+.pole{stroke:var(--steel-edge);stroke-width:1.5}
+.lamp{fill:var(--lamp-off);stroke:var(--steel-edge);stroke-width:.6}
+.tool.idle .lamp{fill:var(--ok)}
+.tool.running .lamp{fill:var(--run)}
+.tool.down .lamp{fill:var(--bad)}
+.tool.maint .lamp{fill:var(--warn)}
+.tool.down .f-top{stroke:var(--bad);stroke-width:2}
+.wafer,.pbar,.pbar-bg{display:none}
+.tool.running .wafer,.tool.running .pbar,.tool.running .pbar-bg{display:inline}
+.pbar-bg{fill:var(--bg);opacity:.85}
+.pbar{fill:var(--run)}
+.halo{fill:none;stroke:transparent;stroke-width:3}
+.tool.eligible .halo{stroke:var(--amber);animation:pulse 1.2s ease-in-out infinite}
+.tool.picked .f-top{stroke:var(--ink);stroke-width:2}
+.tool:focus-visible .f-top{stroke:var(--run);stroke-width:2.5}
+@keyframes pulse{50%{opacity:.25}}
+@media (prefers-reduced-motion: reduce){.tool.eligible .halo{animation:none}}
+
+/* ---------- lots ---------- */
+.lots-head{display:flex;align-items:baseline;gap:10px;padding:10px 14px 6px}
+.lots-head h2{font-size:19px}
+.lots-head .muted{color:var(--muted);font-size:14px}
+#lots{display:grid;grid-template-columns:repeat(auto-fill,minmax(158px,1fr));gap:8px;padding:0 14px 16px}
+.lot{font:inherit;color:inherit;text-align:left;background:var(--surface);border:1px solid var(--line);
+  border-radius:8px;padding:9px 11px;cursor:pointer;display:grid;gap:2px;position:relative;min-height:84px}
+.lot *{pointer-events:none}
+.lot .id{font:600 18px/1.1 var(--cond);display:flex;gap:6px;align-items:center}
+.lot .hot{font:600 12px/1 var(--cond);background:var(--bad);color:#fff;border-radius:4px;padding:2px 5px}
+.lot .what{font-size:14px}
+.lot .due{font-size:13px;color:var(--muted)}
+.lot .due.late{color:var(--bad);font-weight:500}
+.lot.sel{border-color:var(--amber);box-shadow:0 0 0 2px var(--amber)}
+.lot.metro{background:var(--amber-soft);border-color:var(--amber)}
+.lot.running{opacity:.7}
+.qbar{height:4px;border-radius:2px;background:var(--line);overflow:hidden;margin-top:4px}
+.qbar i{display:block;height:100%;background:var(--ok)}
+.qbar.warn i{background:var(--warn)} .qbar.bad i{background:var(--bad)}
+.empty{color:var(--muted);padding:0 14px 16px}
+
+/* ---------- side panel ---------- */
+.panel{background:var(--surface);border-top:1px solid var(--line);padding:16px 16px 28px}
+.panel h2{font-size:24px;line-height:1.1}
+.panel .status{color:var(--muted);margin:4px 0 12px}
+.panel h3{font-size:17px;margin:18px 0 6px}
+.note{color:var(--muted);font-size:14px;max-width:60ch}
+.tabs{display:flex;gap:6px;margin:0 0 14px;border-bottom:1px solid var(--line)}
+.tab{font:600 16px/1 var(--cond);background:none;border:0;border-bottom:3px solid transparent;color:var(--muted);
+  padding:10px 8px;cursor:pointer}
+.tab[aria-selected="true"]{color:var(--ink);border-bottom-color:var(--amber)}
+.slider{display:grid;grid-template-columns:1fr auto;gap:2px 10px;margin:12px 0}
+.slider output{font:600 16px var(--cond)}
+.slider input{grid-column:1/-1;width:100%;accent-color:var(--amber);min-height:30px}
+.pred{display:grid;gap:4px}
+.prow{display:flex;justify-content:space-between;gap:10px;padding:6px 0;border-bottom:1px solid var(--line);font-size:14px}
+.prow strong{font:600 16px var(--cond)}
+.st-ok{color:var(--ok)} .st-warn{color:var(--warn)} .st-bad{color:var(--bad)}
+.locked{background:var(--bg);border-radius:8px;padding:10px 12px;font-size:14px;margin-bottom:10px}
+.spc{margin:8px 0 14px}
+.spc .lab{display:flex;justify-content:space-between;font-size:14px}
+.spc svg{width:100%;height:auto;display:block}
+.spc .lim{stroke:var(--bad);stroke-dasharray:3 3;stroke-width:1}
+.spc .tgt{stroke:var(--muted);stroke-width:.8;opacity:.6}
+.spc .trace{stroke:var(--ink);stroke-width:1.3;fill:none}
+.stack{display:grid;gap:8px;margin-top:8px}
+.stack .btn{text-align:left;display:flex;justify-content:space-between;gap:10px;font-family:var(--sans);font-weight:500;font-size:15px}
+.route{list-style:none;margin:8px 0 0;padding:0;counter-reset:r}
+.route li{display:grid;grid-template-columns:28px 1fr;gap:2px 8px;padding:8px 0;border-bottom:1px solid var(--line);counter-increment:r}
+.route li::before{content:counter(r);font:600 15px/1.4 var(--cond);color:var(--muted);grid-row:span 2}
+.route li.done::before{content:"✓";color:var(--ok)}
+.route li.now::before{color:var(--amber)}
+.route li.now{font-weight:500}
+.route .res{font-size:13px;color:var(--muted)}
+.lesson{font-size:14px;padding:8px 0;border-bottom:1px solid var(--line)}
+
+/* ---------- modal & toasts ---------- */
+.modal{position:fixed;inset:0;z-index:20;background:rgba(10,14,16,.55);display:flex;align-items:flex-end;justify-content:center;
+  padding:env(safe-area-inset-top,0px) 0 0}
+.modal[hidden]{display:none}
+@media(min-width:640px){.modal{align-items:center;padding:24px}}
+.dialog{background:var(--surface);color:var(--ink);width:100%;max-width:600px;max-height:92%;overflow:auto;
+  border-radius:14px 14px 0 0;padding:20px 18px calc(20px + env(safe-area-inset-bottom,0px))}
+@media(min-width:640px){.dialog{border-radius:14px;max-height:90vh}}
+.dialog h2{font-size:26px;line-height:1.1}
+.dialog .sub{color:var(--muted);margin:4px 0 12px}
+.dialog p + p{margin-top:10px}
+.dialog ul{padding-left:20px;margin:10px 0} .dialog li{margin:6px 0;max-width:62ch}
+.mrow{padding:8px 0;border-bottom:1px solid var(--line)}
+.mhead{display:flex;align-items:baseline;gap:10px}
+.mhead .mname{font-weight:500}
+.mhead .spec{color:var(--muted);font-size:13px}
+.mhead strong{margin-left:auto;font:600 20px var(--cond)}
+.mhead small{font:400 13px var(--sans);color:var(--muted)}
+.strip{width:100%;height:auto;display:block;margin-top:4px}
+.strip .band{fill:var(--ok);opacity:.14}
+.strip .axis{stroke:var(--line)}
+.strip .dot{fill:var(--ink)}
+.strip .mean{stroke:var(--amber);stroke-width:2.5}
+.strip .tgt{stroke:var(--muted);stroke-dasharray:2 2}
+.recipe{font-size:14px;color:var(--muted);margin-top:10px}
+.actions{display:flex;flex-wrap:wrap;gap:8px;margin-top:12px}
+.actions .btn{flex:1 1 120px}
+.hint{font-size:14px;color:var(--muted);margin-top:8px}
+.ledger{width:100%;border-collapse:collapse;margin:10px 0;font-size:15px}
+.ledger td{padding:6px 0;border-bottom:1px solid var(--line)}
+.ledger td:last-child{text-align:right;font:600 16px var(--cond)}
+.ledger tr.total td{border-bottom:0;font-weight:600;font-size:17px}
+#toasts{position:fixed;left:50%;transform:translateX(-50%);bottom:calc(14px + env(safe-area-inset-bottom,0px));
+  z-index:30;display:grid;gap:6px;width:min(92vw,460px);pointer-events:none}
+.toast{background:var(--ink);color:var(--bg);border-radius:8px;padding:10px 14px;font-size:14px;border-left:5px solid var(--run)}
+.toast.ok{border-left-color:var(--ok)} .toast.warn{border-left-color:var(--warn)} .toast.bad{border-left-color:var(--bad)}
+</style>
+</head>
+<body>
+
+<header class="bar">
+  <h1 class="brand">FabSim</h1>
+  <span class="clock" id="clock">Day shift 07:00</span>
+  <span class="cash" id="cash">$20,000</span>
+  <div class="controls">
+    <div class="seg" role="group" aria-label="Game speed">
+      <button data-speed="0" aria-pressed="false" aria-label="Pause">❚❚</button>
+      <button data-speed="1" aria-pressed="true" aria-label="Play">▶</button>
+      <button data-speed="2" aria-pressed="false" aria-label="Double speed">2×</button>
+    </div>
+    <button class="btn" id="startLot">Start lot (−$1,000)</button>
+    <span class="spacer"></span>
+    <button class="btn" id="helpBtn">How to play</button>
+  </div>
+</header>
+
+<main>
+  <div>
+    <div class="floorwrap">
+      <svg id="floor" viewBox="0 30 472 262" role="group" aria-label="Fab floor"></svg>
+    </div>
+    <div class="lots-head"><h2>Lots</h2><span class="muted" id="lotsSummary"></span></div>
+    <div id="lots"></div>
+    <p class="empty" id="lotsEmpty" hidden>No lots on the line. Start a lot to feed the clean bench.</p>
+  </div>
+  <aside class="panel" id="panel" aria-live="polite"></aside>
+</main>
+
+<div class="modal" id="modal" hidden></div>
+<div id="toasts" aria-live="polite"></div>
+
+<script>
+'use strict';
+/* ==========================================================================
+   FabSim v2 — single-file vanilla JavaScript.
+   Read it top to bottom:
+     1. CONFIG    — every number that defines the game
+     2. PHYSICS   — pure functions: recipe in, true lot means out
+     3. HELPERS   — random numbers, formatting, spec judgement
+     4. STATE     — the one object `s` that holds the whole game
+     5. RULES     — dispatch, processing, metrology, drift, shipping
+     6. RENDER    — draw the floor, the lot cards, the panel, dialogs
+     7. INPUT     — clicks, sliders, keyboard
+     8. LOOP      — requestAnimationFrame clock
+   ========================================================================== */
+
+/* ---------------------------- 1. CONFIG ---------------------------------- */
+const MIN_PER_SEC   = 2;      // game minutes that pass per real second at 1×
+const SHIFT_MIN     = 720;    // a 12-hour shift
+const QTIME_MIN     = 120;    // clean → furnace queue-time limit
+const LOT_SIZE      = 25;
+const SAMPLE_SLOTS  = [0, 12, 24];  // default metrology sample: slots 1, 13, 25
+const START_CASH    = 20000;
+const WAFER_COST    = 1000;
+const LOT_VALUE     = 7000, HOT_VALUE = 14000;
+const DUE_MIN       = 600,  HOT_DUE_MIN = 400;
+const LATE_FACTOR   = 0.7;
+const FULL_METRO_COST = 150, LITHO_REWORK_COST = 150;
+const MTBF_MIN      = 720;    // mean time until a tool starts drifting
+const DRIFT_RAMP_MIN = 200;   // drift grows from nothing to a hard alarm over this long
+const FIX_EARLY = 300, FIX_AFTER_ALARM = 600, WRONG_PART = 750, QUAL_COST = 100;
+const SAVE_KEY = 'fabsim-v3';
+
+// Recipe knobs. Keys are unique across tools so a recipe is just {key: value}.
+const PARAMS = {
+  dose:     {label:'Exposure dose',  unit:'mJ/cm²',     min:15,  max:30,  step:0.1,  def:22,   dp:1},
+  focus:    {label:'Focus offset',   unit:'µm',         min:-0.3,max:0.3, step:0.01, def:0,    dp:2},
+  idose:    {label:'Implant dose',   unit:'×10¹⁴ cm⁻²', min:0.6, max:1.6, step:0.01, def:1.0,  dp:2},
+  energy:   {label:'Beam energy',    unit:'keV',        min:20,  max:70,  step:0.5,  def:40,   dp:1},
+  tilt:     {label:'Tilt',           unit:'°',          min:0,   max:10,  step:0.1,  def:7,    dp:1},
+  temp:     {label:'Temperature',    unit:'°C',         min:900, max:1100,step:1,    def:1000, dp:0},
+  time:     {label:'Oxidation time', unit:'min',        min:5,   max:25,  step:0.1,  def:12,   dp:1},
+  power:    {label:'RF power',       unit:'W',          min:200, max:800, step:5,    def:400,  dp:0},
+  pressure: {label:'Pressure',       unit:'mTorr',      min:10,  max:60,  step:0.5,  def:30,   dp:1},
+  etime:    {label:'Etch time',      unit:'s',          min:5,   max:120, step:1,    def:68,   dp:0},
+  sih4:     {label:'SiH₄ flow',      unit:'sccm',       min:100, max:400, step:1,    def:200,  dp:0},
+  rf:       {label:'RF power',       unit:'W',          min:100, max:600, step:5,    def:300,  dp:0},
+  dtime:    {label:'Deposition time',unit:'s',          min:60,  max:320, step:1,    def:200,  dp:0},
+  jcur:     {label:'Current density',unit:'mA/cm²',     min:4,   max:20,  step:0.1,  def:10,   dp:1},
+  ptime:    {label:'Plating time',   unit:'s',          min:100, max:600, step:1,    def:258,  dp:0},
+  force:    {label:'Down force',     unit:'psi',        min:1.5, max:6,   step:0.1,  def:3,    dp:1},
+  rpm:      {label:'Platen speed',   unit:'rpm',        min:40,  max:140, step:1,    def:90,   dp:0},
+  ctime:    {label:'Polish time',    unit:'s',          min:10,  max:300, step:1,    def:165,  dp:0},
+};
+
+// What metrology reports. wSig = true wafer-to-wafer spread, mSig = gauge noise,
+// soft = how far past a limit before a wafer's yield hits zero.
+// oneSided: 'max' means only the upper limit matters, 'min' only the lower.
+const METRICS = {
+  cd:      {label:'Critical dimension', unit:'nm',        lsl:235, usl:265, target:250, wSig:3.5,  mSig:2.5,  soft:12,  dp:1},
+  overlay: {label:'Overlay',            unit:'nm',        lsl:0,   usl:20,  target:0,   wSig:2.5,  mSig:2,    soft:10,  dp:1, oneSided:'max'},
+  defects: {label:'Particles',          unit:'per wafer', lsl:0,   usl:25,  target:0,   wSig:0,    mSig:0,    soft:25,  dp:0, oneSided:'max'},
+  rs:      {label:'Sheet resistance',   unit:'Ω/sq',      lsl:180, usl:260, target:220, wSig:5,    mSig:3,    soft:35,  dp:0},
+  rp:      {label:'Projected range',    unit:'nm',        lsl:55,  usl:80,  target:66,  wSig:1.2,  mSig:0.8,  soft:10,  dp:1},
+  chan:    {label:'Channeling tail',    unit:'%',         lsl:0,   usl:3,   target:1,   wSig:0.25, mSig:0.2,  soft:4,   dp:1, oneSided:'max'},
+  xox:     {label:'Oxide thickness',    unit:'nm',        lsl:48,  usl:62,  target:55,  wSig:0.8,  mSig:0.5,  soft:6,   dp:1},
+  unif:    {label:'Uniformity',         unit:'%',         lsl:0,   usl:2.5, target:1.5, wSig:0.15, mSig:0.1,  soft:1.5, dp:2, oneSided:'max'},
+  depth:   {label:'Etch depth',         unit:'nm',        lsl:260, usl:310, target:285, wSig:5,    mSig:4,    soft:25,  dp:0},
+  angle:   {label:'Sidewall angle',     unit:'°',         lsl:85,  usl:90,  target:88,  wSig:0.35, mSig:0.25, soft:3,   dp:1},
+  sel:     {label:'Selectivity',        unit:':1',        lsl:6,   usl:Infinity, target:8, wSig:0.2, mSig:0.15, soft:2, dp:1, oneSided:'min'},
+  ild:     {label:'ILD thickness',      unit:'nm',        lsl:470, usl:530, target:500, wSig:5,    mSig:3,    soft:30,  dp:0},
+  ildUnif: {label:'ILD uniformity',     unit:'%',         lsl:0,   usl:3,   target:1.2, wSig:0.15, mSig:0.1,  soft:2,   dp:2, oneSided:'max'},
+  stress:  {label:'Film stress',        unit:'MPa',       lsl:-300,usl:-100,target:-200,wSig:8,    mSig:5,    soft:80,  dp:0},
+  // Plated thickness doesn't cost yield directly: its effect shows up at CMP
+  cu:      {label:'Copper thickness',   unit:'nm',        lsl:800, usl:1000,target:900, wSig:12,   mSig:6,    soft:80,  dp:0, noYield:true},
+  cuUnif:  {label:'Copper uniformity',  unit:'%',         lsl:0,   usl:4,   target:1.6, wSig:0.2,  mSig:0.15, soft:3,   dp:2, oneSided:'max', noYield:true},
+  voids:   {label:'Fill voids',         unit:'%',         lsl:0,   usl:1,   target:0.2, wSig:0.08, mSig:0.06, soft:2,   dp:2, oneSided:'max'},
+  residue: {label:'Copper residue',     unit:'nm',        lsl:0,   usl:5,   target:0,   wSig:0,    mSig:1.5,  soft:30,  dp:1, oneSided:'max'},
+  dishing: {label:'Dishing',            unit:'nm',        lsl:0,   usl:45,  target:20,  wSig:0,    mSig:2,    soft:40,  dp:1, oneSided:'max'},
+};
+
+// The tools. gx/gy/w/d place the box on the isometric grid; h is its height in px.
+const TOOLS = {
+  CLEAN: { name:'Wet clean', short:'Clean', accent:'#5E9FC4', gx:0.4, gy:0.5, w:1.3, d:1.0, h:24,
+    cost:50, minutes:() => 20, params:[], metrics:[], faults:[], alarm:'' },
+  OX: { name:'Oxidation furnace', short:'Furnace', accent:'#D06A34', gx:0.4, gy:2.5, w:1.1, d:1.0, h:52,
+    cost:100, minutes:r => 12 + r.time, params:['temp','time'], metrics:['xox','unif'],
+    alarm:'Temperature control alarm. The furnace is down.',
+    faults:[
+      {id:'tc',   name:'Thermocouple drift',            sig:'Oxide thins and uniformity degrades together.'},
+      {id:'mfc',  name:'O₂ mass flow controller drift', sig:'Oxide thins while uniformity holds.'},
+      {id:'zone', name:'Zone heater imbalance',         sig:'Uniformity and wafer-to-wafer spread worsen while mean thickness holds.'} ] },
+  LITHO: { name:'Stepper', short:'Stepper', accent:'#D99A00', gx:2.4, gy:1.3, w:1.6, d:1.2, h:36,
+    cost:150, minutes:() => 13, params:['dose','focus'], metrics:['cd','overlay','defects'],
+    alarm:'Stage interlock tripped. The stepper is down.',
+    faults:[
+      {id:'dose',    name:'Dose sensor drift',         sig:'CD walks up lot after lot while overlay holds.'},
+      {id:'lens',    name:'Lens heating (focus drift)', sig:'Overlay climbs while CD holds.'},
+      {id:'reticle', name:'Particle on the reticle',    sig:'Particle counts climb while CD and overlay hold.'} ] },
+  ETCH: { name:'Plasma etcher', short:'Etch', accent:'#7A5FB8', gx:4.6, gy:0.4, w:1.2, d:1.1, h:30,
+    cost:120, minutes:r => 10 + r.etime / 12, params:['power','pressure','etime'], metrics:['depth','angle','sel'],
+    alarm:'Plasma ignition fault. The etcher is down.',
+    faults:[
+      {id:'wall',     name:'Chamber wall deposition', sig:'Depth falls steadily lot after lot.'},
+      {id:'rf',       name:'RF match network drift',  sig:'Depth jumps around and selectivity sags.'},
+      {id:'throttle', name:'Throttle valve drift',    sig:'Sidewall angle falls and depth dips slightly.'} ] },
+  IMP: { name:'Ion implanter', short:'Implant', accent:'#3C9676', gx:4.6, gy:2.6, w:1.4, d:1.1, h:32,
+    cost:180, minutes:() => 16, params:['idose','energy','tilt'], metrics:['rs','rp','chan'],
+    alarm:'Beam setup failed. The implanter is down.',
+    faults:[
+      {id:'faraday',  name:'Faraday cup / dose integrator drift', sig:'Sheet resistance climbs while range holds.'},
+      {id:'analyzer', name:'Analyzer magnet drift',               sig:'Projected range shifts deeper while Rs holds.'},
+      {id:'clamp',    name:'Wafer clamp tilt error',               sig:'Channeling tail rises.'} ] },
+  PECVD: { name:'PECVD oxide', short:'PECVD', accent:'#B8568A', gx:0.4, gy:4.6, w:1.2, d:1.1, h:34,
+    cost:110, minutes:r => 8 + r.dtime / 30, params:['sih4','rf','dtime'], metrics:['ild','ildUnif','stress'],
+    alarm:'Reflected power alarm. PECVD is down.',
+    faults:[
+      {id:'shower', name:'Clogged showerhead',              sig:'Film thins and uniformity degrades together.'},
+      {id:'rfgen',  name:'RF generator calibration drift',  sig:'Stress turns more compressive and thickness creeps up.'},
+      {id:'heater', name:'Pedestal heater drift',           sig:'Stress drifts toward tensile while thickness holds.'} ] },
+  PLATE: { name:'Copper plating', short:'Plating', accent:'#B8733A', gx:2.6, gy:4.7, w:1.4, d:1.1, h:30,
+    cost:140, minutes:r => 10 + r.ptime / 30, params:['jcur','ptime'], metrics:['cu','cuUnif','voids'],
+    alarm:'Rectifier fault. The plating cell is down.',
+    faults:[
+      {id:'additive', name:'Bath additive depletion', sig:'Fill voids climb while thickness holds.'},
+      {id:'ring',     name:'Fouled contact ring',     sig:'Within-wafer uniformity degrades while mean thickness holds.'},
+      {id:'rect',     name:'Rectifier current drift', sig:'Copper comes out thinner for the same charge.'} ] },
+  CMP: { name:'Copper CMP', short:'CMP', accent:'#5F7483', gx:4.7, gy:4.6, w:1.3, d:1.2, h:26,
+    cost:160, minutes:r => 8 + r.ctime / 30, params:['force','rpm','ctime'], metrics:['residue','dishing'],
+    alarm:'Carrier head pressure fault. CMP is down.',
+    faults:[
+      {id:'pad',     name:'Glazed pad (conditioner wear)', sig:'Removal rate falls, so residue appears at the same polish time.'},
+      {id:'slurry',  name:'Slurry flow drift',             sig:'Residue shows on some wafers and not others as scatter grows.'},
+      {id:'carrier', name:'Retaining ring wear',           sig:'Dishing climbs while residue holds.'} ] },
+};
+
+// The process route. The stepper serves three layers and the etcher two:
+// that reentrance is the dispatch puzzle. Steps can override a spec.
+const ROUTE = [
+  {tool:'CLEAN', label:'Pre-furnace clean'},
+  {tool:'OX',    label:'Thermal oxide'},
+  {tool:'LITHO', label:'Litho 1, active area'},
+  {tool:'ETCH',  label:'Trench etch', mat:'si'},
+  {tool:'LITHO', label:'Litho 2, well mask'},
+  {tool:'IMP',   label:'Well implant'},
+  {tool:'PECVD', label:'ILD deposition'},
+  {tool:'LITHO', label:'Litho 3, metal 1'},
+  {tool:'ETCH',  label:'ILD trench etch', mat:'ox', spec:{depth:{lsl:230, usl:270, target:250, soft:20}}},
+  {tool:'PLATE', label:'Copper fill'},
+  {tool:'CMP',   label:'Copper CMP'},
+];
+const PLATE_STEP = ROUTE.findIndex(st => st.tool === 'PLATE');
+
+/* ---------------------------- 2. PHYSICS --------------------------------- */
+// Each function takes a locked recipe and the tool's hidden fault ({id, s}, s = 0..1)
+// and returns the TRUE lot-mean values. The player never sees these directly.
+const K_B = 8.617e-5; // Boltzmann constant, eV/K
+
+const PHYSICS = {
+  CLEAN: () => ({}),
+
+  LITHO(r, f) {
+    let dose = r.dose, focus = r.focus, particles = 2;
+    if (f.id === 'dose')    dose *= 1 - 0.14 * f.s;      // sensor over-reads, wafer gets less dose
+    if (f.id === 'lens')    focus += 0.17 * f.s;
+    if (f.id === 'reticle') particles += 45 * f.s;
+    return {
+      cd: 250 * Math.pow(dose / 22, -0.45),             // CD vs exposure dose
+      overlay: Math.abs(focus) * 180,
+      defects: particles,
+    };
+  },
+
+  IMP(r, f) {
+    let dose = r.idose, energy = r.energy, tilt = r.tilt;
+    if (f.id === 'faraday')  dose *= 1 - 0.22 * f.s;
+    if (f.id === 'analyzer') energy += 14 * f.s;
+    if (f.id === 'clamp')    tilt *= 1 - 0.85 * f.s;
+    return {
+      rs: 220 / dose,
+      rp: energy * 1.4 + 10,
+      chan: 30 * Math.exp(-tilt / 2),                    // channeling tail collapses above ~5°
+    };
+  },
+
+  OX(r, f) {
+    let T = r.temp, bScale = 1, unifAdd = 0, spread = 1;
+    if (f.id === 'tc')   T -= 22 * f.s;                   // TC reads high → furnace runs cold
+    if (f.id === 'mfc')  bScale = 1 - 0.35 * f.s;
+    if (f.id === 'zone') { unifAdd = 2.2 * f.s; spread = 1 + 2.5 * f.s; }
+    // Deal-Grove with Arrhenius-scaled parabolic rate constant (Ea = 1.23 eV)
+    const arr = T2 => Math.exp(-1.23 / (K_B * (T2 + 273)));
+    const B = 0.00027 * (arr(T) / arr(1000)) * bScale;   // µm²/min
+    const A = 0.0165;                                     // µm
+    const x = (-A / 2 + Math.sqrt((A / 2) ** 2 + B * r.time)) * 1000 + 5; // +5 nm native
+    return {
+      xox: x,
+      unif: 1.5 + Math.abs(T - 1000) * 0.08 + unifAdd,
+      spread: {xox: spread},
+    };
+  },
+
+  ETCH(r, f, ctx) {
+    let p = r.pressure, rateScale = 1, jitter = 0, selLoss = 0, spread = 1;
+    if (f.id === 'wall')     rateScale = 1 - 0.28 * f.s;
+    if (f.id === 'rf')       { jitter = 22 * f.s; selLoss = 1.6 * f.s; spread = 1 + 1.5 * f.s; }
+    if (f.id === 'throttle') p += 18 * f.s;
+    const matFactor = ctx && ROUTE[ctx.step].mat === 'ox' ? 0.8 : 1;    // oxide etches slower than Si
+    const rate = 3.2 * Math.pow(r.power, 0.6) / Math.pow(p, 0.3) * rateScale * matFactor; // nm/s
+    return {
+      depth: rate * r.etime / 10 + gauss() * jitter,
+      angle: 88 - Math.abs(p - 30) * 0.3,
+      sel: 8 - (r.power - 400) / 200 - selLoss,
+      spread: {depth: spread},
+    };
+  },
+
+  PECVD(r, f) {
+    let power = r.rf, rateScale = 1, unifAdd = 0, stressAdd = 0;
+    if (f.id === 'shower') { rateScale = 1 - 0.18 * f.s; unifAdd = 2.6 * f.s; }
+    if (f.id === 'rfgen')  power *= 1 + 0.45 * f.s;
+    if (f.id === 'heater') stressAdd = 130 * f.s;
+    const rate = 2.5 * Math.pow(r.sih4 / 200, 0.8) * Math.pow(power / 300, 0.3) * rateScale; // nm/s
+    return {
+      ild: rate * r.dtime,
+      ildUnif: 1.2 + Math.abs(r.sih4 - 200) * 0.012 + unifAdd,
+      stress: -200 - (power - 300) * 0.5 + stressAdd,   // more ion bombardment → more compressive
+    };
+  },
+
+  PLATE(r, f) {
+    let eff = 0.95, voidAdd = 0, unifAdd = 0;
+    if (f.id === 'rect')     eff *= 1 - 0.15 * f.s;
+    if (f.id === 'additive') voidAdd = 2.2 * f.s;
+    if (f.id === 'ring')     unifAdd = 4 * f.s;
+    return {
+      cu: 0.367 * r.jcur * r.ptime * eff,                          // Faraday's law, Cu²⁺: 0.367 nm per mA·s/cm²
+      cuUnif: 1.6 + Math.abs(r.jcur - 10) * 0.1 + unifAdd,
+      voids: 0.2 + Math.max(0, r.jcur - 12) ** 2 * 0.08 + voidAdd, // plate too fast and the fill pinches off
+    };
+  },
+
+  // CMP works wafer by wafer: each wafer's result depends on what plating left on it.
+  CMP(r, f, ctx) {
+    let rateScale = 1, scatter = 0.03, dishAdd = 0;
+    if (f.id === 'pad')     rateScale = 1 - 0.3 * f.s;
+    if (f.id === 'slurry')  scatter = 0.03 + 0.12 * f.s;
+    if (f.id === 'carrier') dishAdd = 32 * f.s;
+    const RR = 0.0222 * r.force * r.rpm * rateScale;              // Preston: RR = Kp·P·V (nm/s)
+    const lot = ctx && ctx.lot, carry = lot && lot.cmpCarry;
+    const plated = lot && lot.results[ctx.plateStep];
+    const residue = [], dishing = [];
+    for (let w = 0; w < (lot ? LOT_SIZE : 1); w++) {
+      // copper to clear = the thickest spot on this wafer (nominal 900 nm, 1.6% if predicting)
+      const toClear = carry ? carry.cu[w]
+        : plated ? plated.wafers.cu[w] * (1 + plated.wafers.cuUnif[w] / 100) : 900 * 1.016;
+      const removed = RR * r.ctime * (lot ? 1 + gauss() * scatter : 1);
+      const over = Math.max(0, removed - toClear);
+      residue.push(Math.max(0, toClear - removed));
+      dishing.push((carry ? carry.dish[w] : 12 + 4 * Math.max(0, r.force - 3) + dishAdd) + 0.12 * over);
+    }
+    return {residue:avg(residue), dishing:avg(dishing), perWafer: lot ? {residue, dishing} : null};
+  },
+};
+
+/* ---------------------------- 3. HELPERS --------------------------------- */
+const $ = sel => document.querySelector(sel);
+function gauss() { let u = 0, v = 0; while (!u) u = Math.random(); while (!v) v = Math.random();
+  return Math.sqrt(-2 * Math.log(u)) * Math.cos(2 * Math.PI * v); }
+const expRand = mean => -Math.log(1 - Math.random()) * mean;
+const pick = arr => arr[Math.floor(Math.random() * arr.length)];
+const avg = arr => arr.reduce((a, b) => a + b, 0) / arr.length;
+const clamp = (v, lo, hi) => Math.min(hi, Math.max(lo, v));
+function fmtMoney(n) { return (n < 0 ? '−' : '') + '$' + Math.abs(Math.round(n)).toLocaleString('en-US'); }
+function fmtDur(min) { const m = Math.max(0, Math.round(min)), h = Math.floor(m / 60);
+  return h ? `${h}h ${m % 60}m` : `${m}m`; }
+const fmtVal = (m, v) => v.toFixed(METRICS[m].dp);
+const fmtParam = (k, v) => `${v.toFixed(PARAMS[k].dp)} ${PARAMS[k].unit}`;
+
+// A route step can override a metric's spec (e.g. the ILD trench is shallower)
+function spec(m, step) {
+  const o = step != null && ROUTE[step] && ROUTE[step].spec && ROUTE[step].spec[m];
+  return o ? {...METRICS[m], ...o} : METRICS[m];
+}
+function specText(m, step) {
+  const M = spec(m, step);
+  if (M.oneSided === 'max') return `≤ ${M.usl} ${M.unit}`;
+  if (M.oneSided === 'min') return `≥ ${M.lsl}${M.unit}`;
+  return `${M.lsl}–${M.usl} ${M.unit}`;
+}
+// 'ok' in spec, 'warn' inside the guard band near a limit, 'bad' out of spec
+function judge(m, v, step) {
+  const M = spec(m, step);
+  const lowOn = M.oneSided !== 'max', highOn = M.oneSided !== 'min';
+  if ((lowOn && v < M.lsl) || (highOn && v > M.usl)) return 'bad';
+  const guard = 0.12 * (M.oneSided ? M.soft * 2 : M.usl - M.lsl);
+  if ((lowOn && v - M.lsl < guard) || (highOn && M.usl - v < guard)) return 'warn';
+  return 'ok';
+}
+// Fraction of a wafer's die that survive one measured parameter
+function metricFactor(m, v, step) {
+  const M = spec(m, step);
+  if (M.noYield) return 1;
+  if (m === 'defects') return Math.exp(-v / 70);   // Poisson-style defect-limited yield
+  let over = 0;
+  if (M.oneSided !== 'max' && v < M.lsl) over = M.lsl - v;
+  if (M.oneSided !== 'min' && v > M.usl) over = v - M.usl;
+  return Math.max(0, 1 - over / M.soft);
+}
+function plotRange(m, step) {
+  const M = spec(m, step);
+  if (M.oneSided === 'max') return [0, M.usl + M.soft];
+  if (M.oneSided === 'min') return [M.lsl - M.soft, M.lsl + M.soft * 2];
+  return [M.lsl - M.soft, M.usl + M.soft];
+}
+function waferValue(m, mean, spread) {
+  if (m === 'defects') return Math.max(0, Math.round(mean + gauss() * Math.sqrt(mean + 1)));
+  const v = mean + gauss() * METRICS[m].wSig * spread;
+  if (m === 'overlay') return Math.abs(v);
+  return METRICS[m].oneSided === 'max' ? Math.max(0, v) : v;
+}
+function measure(m, trueVal) {
+  if (m === 'defects') return Math.max(0, trueVal + Math.round(gauss() * 1.5));
+  const v = trueVal + gauss() * METRICS[m].mSig;
+  return METRICS[m].oneSided === 'max' ? Math.abs(v) : v;
+}
+const defaultRecipe = id => Object.fromEntries(TOOLS[id].params.map(k => [k, PARAMS[k].def]));
+const recipeText = (id, r) => TOOLS[id].params.map(k => `${PARAMS[k].label.toLowerCase()} ${fmtParam(k, r[k])}`).join(', ');
+
+/* ---------------------------- 4. STATE ----------------------------------- */
+let s;                 // the whole game lives here, and it's saved as JSON
+let modalOpen = false; // the clock stops while a dialog is open
+let reviewLotId = null;
+let panelDirty = true;
+
+function newLedger() {
+  return {revenue:0, wafers:0, process:0, metro:0, rework:0, maint:0, penalty:0,
+          shipped:0, onTime:0, yieldSum:0, scrapped:0, alarms:0, early:0, qfails:0};
+}
+function newGame() {
+  s = {v:3, t:0, shift:1, cash:START_CASH, speed:1, lots:[], nextLot:1001, tools:{},
+       recipes:{}, layer:{},   // recipes live on route steps, not tools: each layer has its own
+       ledger:newLedger(), nextHotAt:150 + Math.random() * 150, lessons:[],
+       selectedLot:null, selectedTool:null, tab:'recipe', seenIntro:false};
+  for (const id in TOOLS)
+    s.tools[id] = {locked:null, lot:null, status:'idle', progress:0, dur:0,
+                   maint:0, maintThen:null, fault:null, spc:{}, nextFaultAt:150 + expRand(MTBF_MIN)};
+  ROUTE.forEach((st, i) => {
+    if (!TOOLS[st.tool].params.length) return;
+    s.recipes[i] = defaultRecipe(st.tool);
+    s.tools[st.tool].spc[i] = Object.fromEntries(TOOLS[st.tool].metrics.map(m => [m, []]));
+  });
+  for (let i = 0; i < 3; i++) releaseLot(false, true); // starting WIP is free
+}
+function save() { try { localStorage.setItem(SAVE_KEY, JSON.stringify(s)); } catch (e) {} }
+function load() {
+  try { const o = JSON.parse(localStorage.getItem(SAVE_KEY) || 'null');
+        if (o && o.v === 3 && o.tools && o.lots) return o; } catch (e) {}
+  return null;
+}
+const lotById = id => s.lots.find(l => l.id === id);
+function spend(amount, category) { s.cash -= amount; s.ledger[category] += amount; }
+
+/* ---------------------------- 5. RULES ----------------------------------- */
+function releaseLot(hot, free) {
+  const lot = {id:(hot ? 'H' : 'A') + s.nextLot++, hot, released:s.t,
+               due:s.t + (hot ? HOT_DUE_MIN : DUE_MIN), value:hot ? HOT_VALUE : LOT_VALUE,
+               step:0, status:'queue', tool:null, results:[], pending:null, qStart:null,
+               reworks:0, addDepth:null, cmpCarry:null};
+  if (!hot && !free) spend(WAFER_COST, 'wafers');
+  s.lots.push(lot);
+  return lot;
+}
+
+// Click-to-assign. The recipe on the tool is copied onto the run here: it's locked.
+function loadLot(lot, id) {
+  const t = s.tools[id], c = TOOLS[id];
+  t.lot = lot.id; t.status = 'run'; t.progress = 0;
+  t.locked = {...s.recipes[lot.step]};
+  t.dur = c.minutes(t.locked);
+  lot.status = 'running'; lot.tool = id; lot.qStart = null;
+  spend(c.cost, 'process');
+  panelDirty = true;
+}
+
+function finishRun(id) {
+  const t = s.tools[id], c = TOOLS[id], lot = lotById(t.lot), recipe = t.locked;
+  t.lot = null; t.status = 'idle'; t.progress = 0; t.locked = null;
+  if (lot) {
+    if (!c.metrics.length) {             // clean has no metrology: straight on
+      advance(lot);
+      if (lot.status === 'queue' && ROUTE[lot.step].tool === 'OX') lot.qStart = s.t;
+    } else {
+      const phys = PHYSICS[id](recipe, t.fault || {id:null, s:0}, {step:lot.step, lot, plateStep:PLATE_STEP});
+      if (id === 'CMP') lot.cmpCarry = null;
+      const wafers = {};
+      for (const m of c.metrics) {
+        if (phys.perWafer && phys.perWafer[m]) { wafers[m] = phys.perWafer[m]; continue; }
+        const spread = (phys.spread && phys.spread[m]) || 1;
+        wafers[m] = Array.from({length:LOT_SIZE}, () => waferValue(m, phys[m], spread));
+      }
+      if (id === 'ETCH' && lot.addDepth) {   // a re-etch stacks on the first etch
+        wafers.depth = wafers.depth.map((v, i) => v + lot.addDepth[i]);
+        lot.addDepth = null;
+      }
+      const sample = [...SAMPLE_SLOTS], measured = {};
+      for (const m of c.metrics) measured[m] = sample.map(w => ({w, v:measure(m, wafers[m][w])}));
+      lot.pending = {step:lot.step, tool:id, recipe, wafers, sample, measured};
+      lot.status = 'metro'; lot.tool = null;
+      for (const m of c.metrics) {           // SPC point = the sample mean
+        const series = t.spc[lot.step][m];
+        series.push(avg(measured[m].map(x => x.v)));
+        if (series.length > 24) series.shift();
+      }
+      toast(`${lot.id} finished at the ${c.short.toLowerCase()}. Metrology is ready.`);
+    }
+  }
+  if (t.fault && t.fault.s >= 1) goDown(id);
+  panelDirty = true;
+}
+
+function advance(lot) {
+  lot.step++; lot.tool = null;
+  if (lot.step >= ROUTE.length) ship(lot); else lot.status = 'queue';
+}
+
+function ship(lot) {
+  let sum = 0;
+  for (let w = 0; w < LOT_SIZE; w++) {
+    let f = 1;
+    lot.results.forEach((r, i) => { if (r && r.wafers) for (const m in r.wafers) f *= metricFactor(m, r.wafers[m][w], i); });
+    sum += f;
+  }
+  const y = sum / LOT_SIZE, late = s.t > lot.due;
+  const revenue = lot.value * y * (late ? LATE_FACTOR : 1);
+  s.cash += revenue;
+  const L = s.ledger; L.revenue += revenue; L.shipped++; L.yieldSum += y; if (!late) L.onTime++;
+  lot.status = 'shipped';
+  toast(`${lot.id} shipped at ${(y * 100).toFixed(1)}% yield${late ? ', late' : ''}. +${fmtMoney(revenue)}`, 'ok');
+}
+
+function reworkRule(lot) {
+  const p = lot.pending, meanOf = m => avg(p.measured[m].map(x => x.v));
+  switch (p.tool) {
+    case 'LITHO': return {ok:true, text:`Rework strips the resist and sends the lot back to the stepper (${fmtMoney(LITHO_REWORK_COST)} plus the exposure).`};
+    case 'ETCH': return meanOf('depth') < spec('depth', p.step).lsl
+      ? {ok:true,  text:'Re-etch adds depth on top of what is already there. Set a short etch time for the missing depth before loading.'}
+      : {ok:false, text:'Re-etch is only allowed when the sample reads under-etched. Material cannot be put back.'};
+    case 'CMP': return meanOf('residue') > spec('residue', p.step).usl
+      ? {ok:true,  text:'A touch-up polish clears leftover copper, but every second past clear adds dishing. Set a short polish time before loading.'}
+      : {ok:false, text:'Touch-up polish is only allowed when the sample shows copper residue. Dishing cannot be undone.'};
+    case 'IMP':   return {ok:false, text:'Implanted dopant cannot be removed, so implant cannot be reworked.'};
+    case 'OX':    return {ok:false, text:'Grown oxide cannot be un-grown, so oxidation cannot be reworked.'};
+    case 'PECVD': return {ok:false, text:'Stripping the ILD would attack the layers under it, so deposition cannot be reworked here.'};
+    case 'PLATE': return {ok:false, text:'Plated copper cannot be pulled back out of the trenches. CMP is where thickness gets settled.'};
+  }
+  return {ok:false, text:''};
+}
+
+function decide(act) {
+  const lot = lotById(reviewLotId);
+  if (!lot || !lot.pending) { closeModal(); return; }
+  const p = lot.pending, c = TOOLS[p.tool];
+  if (act === 'measure-all') {
+    spend(FULL_METRO_COST, 'metro');
+    for (let w = 0; w < LOT_SIZE; w++) if (!p.sample.includes(w)) {
+      p.sample.push(w);
+      for (const m of c.metrics) p.measured[m].push({w, v:measure(m, p.wafers[m][w])});
+    }
+    openModal(reviewHtml(lot));
+    return;
+  }
+  if (act === 'accept') {
+    const means = {};
+    for (const m of c.metrics) means[m] = avg(p.measured[m].map(x => x.v));
+    lot.results[p.step] = {tool:p.tool, wafers:p.wafers, means};
+    lot.pending = null;
+    advance(lot);
+  } else if (act === 'rework') {
+    if (!reworkRule(lot).ok) return;
+    if (p.tool === 'LITHO') spend(LITHO_REWORK_COST, 'rework');
+    else if (p.tool === 'CMP') lot.cmpCarry = {cu:p.wafers.residue, dish:p.wafers.dishing};
+    else lot.addDepth = p.wafers.depth;
+    lot.pending = null; lot.reworks++; lot.status = 'queue';
+    toast(`${lot.id} is back in queue for the ${c.short.toLowerCase()}.`);
+  } else if (act === 'scrap') {
+    lot.pending = null; lot.status = 'scrapped'; s.ledger.scrapped++;
+    toast(`${lot.id} scrapped.`, 'warn');
+  }
+  closeModal(); cleanupLots(); renderAll();
+}
+
+// Drift and alarms
+function goDown(id) {
+  const t = s.tools[id];
+  if (t.status === 'down') return;
+  t.status = 'down'; s.ledger.alarms++;
+  toast(TOOLS[id].alarm, 'bad');
+  panelDirty = true;
+}
+function startMaint(id, minutes, then) {
+  const t = s.tools[id]; t.status = 'maint'; t.maint = minutes; t.maintThen = then; panelDirty = true;
+}
+function maintain(id, choice) {
+  const t = s.tools[id], c = TOOLS[id];
+  if (t.status === 'run' || t.status === 'maint') return;
+  const wasDown = t.status === 'down', f = t.fault, tool = c.short.toLowerCase();
+  if (choice === 'qual') {
+    spend(QUAL_COST, 'maint');
+    if (f && (wasDown || f.s >= 0.35)) {
+      startMaint(id, 15, 'down');
+      toast(`Qual failed on the ${tool}. It stays down until you find the cause.`, 'warn');
+    } else {
+      startMaint(id, 15, 'idle');
+      toast(`Qual passed. The ${tool} is back in 15 minutes.`);
+    }
+  } else {
+    const guess = c.faults.find(x => x.id === choice);
+    if (f && f.id === choice) {
+      spend(wasDown ? FIX_AFTER_ALARM : FIX_EARLY, 'maint');
+      if (!wasDown) s.ledger.early++;
+      t.fault = null; t.nextFaultAt = s.t + 60 + expRand(MTBF_MIN);
+      startMaint(id, 40, 'idle');
+      s.lessons.unshift({tool:id, name:guess.name, sig:guess.sig}); s.lessons.length = Math.min(s.lessons.length, 8);
+      toast(`Found it: ${guess.name}. ${guess.sig}`, 'ok');
+    } else {
+      spend(WRONG_PART, 'penalty');
+      startMaint(id, 30, wasDown ? 'down' : 'idle');
+      toast(`Swapped parts for ${guess.name.toLowerCase()}. That wasn't the problem.`, 'warn');
+    }
+  }
+  renderAll();
+}
+
+// One slice of simulated time (h minutes, at most 1)
+function tick(h) {
+  s.t += h;
+  for (const id in TOOLS) {
+    const t = s.tools[id], c = TOOLS[id];
+    if (t.status === 'run') {
+      t.progress += h / t.dur;
+      if (t.progress >= 1) finishRun(id);
+    } else if (t.status === 'maint') {
+      t.maint -= h;
+      if (t.maint <= 0) {
+        t.status = t.maintThen || 'idle'; t.maintThen = null; panelDirty = true;
+        if (t.status === 'idle') toast(`The ${c.short.toLowerCase()} is back in service.`);
+      }
+    }
+    if (c.faults.length && t.status !== 'maint' && t.status !== 'down') {
+      if (!t.fault && s.t >= t.nextFaultAt) t.fault = {id:pick(c.faults).id, s:0};
+      if (t.fault) t.fault.s = Math.min(1, t.fault.s + h / DRIFT_RAMP_MIN);
+      if (t.fault && t.fault.s >= 1 && t.status === 'idle') goDown(id);
+    }
+  }
+  // Q-time: a cleaned lot has to start oxidation in time or go back to clean
+  for (const lot of s.lots) {
+    if (lot.status === 'queue' && lot.qStart !== null && s.t - lot.qStart > QTIME_MIN) {
+      lot.step = 0; lot.qStart = null; s.ledger.qfails++;
+      if (s.selectedLot === lot.id) s.selectedLot = null;
+      toast(`${lot.id} blew its Q-time and goes back to clean.`, 'warn');
+      panelDirty = true;
+    }
+  }
+  // Customers drop hot lots in
+  if (s.t >= s.nextHotAt) {
+    const lot = releaseLot(true);
+    toast(`Hot lot ${lot.id} arrived. Customer wafers, double value, due in ${fmtDur(HOT_DUE_MIN)}.`, 'bad');
+    s.nextHotAt = s.t + 200 + Math.random() * 220;
+  }
+}
+function cleanupLots() { s.lots = s.lots.filter(l => l.status !== 'shipped' && l.status !== 'scrapped'); }
+
+function endShift() {
+  s.speed = 0; renderSpeed();
+  const L = s.ledger;
+  const costs = L.wafers + L.process + L.metro + L.rework + L.maint + L.penalty;
+  const net = L.revenue - costs;
+  let advice;
+  if (L.alarms > L.early) advice = 'Most drifts show up on the SPC charts several lots before the alarm. Pulling a tool early costs half as much as fixing it after it goes down.';
+  else if (L.qfails > 0) advice = 'Lots are blowing Q-time. Release fewer lots into clean than the furnace can take.';
+  else if (L.shipped && L.onTime < L.shipped) advice = 'Late lots lose 30% of their value. The stepper serves two steps, so decide which layer gets it first.';
+  else advice = 'Clean shift. Try tightening recipes toward target to push yield up.';
+  const rows = [['Revenue', L.revenue], ['Wafer starts', -L.wafers], ['Processing', -L.process],
+    ['Extra metrology', -L.metro], ['Rework', -L.rework], ['Maintenance', -L.maint], ['Wrong parts', -L.penalty]];
+  openModal(`
+    <h2>Shift ${s.shift} report</h2>
+    <p class="sub">${L.shipped} lots shipped, ${L.onTime} on time. Average yield ${L.shipped ? (L.yieldSum / L.shipped * 100).toFixed(1) + '%' : 'n/a'}.
+      ${L.scrapped} scrapped, ${L.qfails} Q-time violations, ${L.alarms} tool alarms, ${L.early} drifts caught before alarm.</p>
+    <table class="ledger">${rows.map(([k, v]) => `<tr><td>${k}</td><td>${fmtMoney(v)}</td></tr>`).join('')}
+      <tr class="total"><td>Net for the shift</td><td class="${net < 0 ? 'st-bad' : 'st-ok'}">${fmtMoney(net)}</td></tr></table>
+    <p>${advice}</p>
+    <div class="actions"><button class="btn primary" data-act="next-shift">Start shift ${s.shift + 1}</button></div>`);
+}
+
+/* ---------------------------- 6. RENDER ---------------------------------- */
+const TW = 34, TH = 17, OX0 = 236, OY0 = 62, FLOOR_W = 6.3, FLOOR_D = 6.3;
+const iso = (gx, gy) => [OX0 + (gx - gy) * TW, OY0 + (gx + gy) * TH];
+const pts = arr => arr.map(p => p[0].toFixed(1) + ',' + p[1].toFixed(1)).join(' ');
+const toolCenter = id => { const c = TOOLS[id]; return iso(c.gx + c.w / 2, c.gy + c.d / 2); };
+
+// The floor is built once. Afterwards only classes and a few attributes change,
+// so a tap that lands mid-frame never hits a replaced element.
+function buildFloor() {
+  let h = `<defs>
+    <linearGradient id="si" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0" stop-color="#34438C"/><stop offset=".5" stop-color="#6A5BA6"/><stop offset="1" stop-color="#2C7C88"/></linearGradient>
+    <marker id="arr" viewBox="0 0 6 6" refX="3" refY="3" markerWidth="5" markerHeight="5" orient="auto">
+      <path d="M0,0 L6,3 L0,6 z" class="arrowhead"/></marker></defs>`;
+  const a = iso(0, 0), b = iso(FLOOR_W, 0), c = iso(FLOOR_W, FLOOR_D), d = iso(0, FLOOR_D), T = 10;
+  h += `<polygon class="slab-l" points="${pts([d, c, [c[0], c[1] + T], [d[0], d[1] + T]])}"/>`;
+  h += `<polygon class="slab-r" points="${pts([b, c, [c[0], c[1] + T], [b[0], b[1] + T]])}"/>`;
+  h += `<polygon class="floor" points="${pts([a, b, c, d])}"/>`;
+  for (let x = 0.7; x < FLOOR_W - 0.01; x += 0.7) { const p = iso(x, 0), q = iso(x, FLOOR_D);
+    h += `<line class="tile" x1="${p[0]}" y1="${p[1]}" x2="${q[0]}" y2="${q[1]}"/>`; }
+  for (let y = 0.7; y < FLOOR_D - 0.01; y += 0.7) { const p = iso(0, y), q = iso(FLOOR_W, y);
+    h += `<line class="tile" x1="${p[0]}" y1="${p[1]}" x2="${q[0]}" y2="${q[1]}"/>`; }
+  for (let x = 0.175; x < FLOOR_W; x += 0.35) for (let y = 0.175; y < FLOOR_D; y += 0.35) {
+    const p = iso(x, y); h += `<circle class="perf" cx="${p[0].toFixed(1)}" cy="${p[1].toFixed(1)}" r=".9"/>`; }
+  // The litho bay sits under amber light, like a real yellow room
+  h += `<polygon class="yellow-room" points="${pts([iso(2.0, 0.85), iso(4.35, 0.85), iso(4.35, 2.85), iso(2.0, 2.85)])}"/>`;
+  // Copper is kept to its own area so it can't contaminate front-end tools
+  h += `<polygon class="cu-room" points="${pts([iso(2.2, 4.25), iso(FLOOR_W, 4.25), iso(FLOOR_W, FLOOR_D), iso(2.2, FLOOR_D)])}"/>`;
+  const floorText = (gx, gy, txt) => { const o = iso(gx, gy);
+    return `<text class="floor-label" transform="matrix(1,0.5,-1,0.5,${o[0].toFixed(1)},${o[1].toFixed(1)})">${txt}</text>`; };
+  h += floorText(2.1, 2.75, 'Yellow room') + floorText(2.3, 6.2, 'Copper area');
+  // Flow path along the route
+  for (let i = 0; i < ROUTE.length - 1; i++) {
+    const p = toolCenter(ROUTE[i].tool), q = toolCenter(ROUTE[i + 1].tool);
+    const mid = [(p[0] + q[0]) / 2, (p[1] + q[1]) / 2];
+    h += `<line class="flow" x1="${p[0]}" y1="${p[1]}" x2="${mid[0]}" y2="${mid[1]}" marker-end="url(#arr)"/>`;
+    h += `<line class="flow" x1="${mid[0]}" y1="${mid[1]}" x2="${q[0]}" y2="${q[1]}"/>`;
+  }
+  // Tools, back to front so nearer boxes overlap farther ones
+  const order = Object.keys(TOOLS).sort((x, y) => (TOOLS[x].gx + TOOLS[x].gy) - (TOOLS[y].gx + TOOLS[y].gy));
+  for (const id of order) h += toolSvg(id);
+  $('#floor').innerHTML = h;
+}
+
+function toolSvg(id) {
+  const c = TOOLS[id], {gx, gy, w, d, h} = c;
+  const A = iso(gx, gy), B = iso(gx + w, gy), C = iso(gx + w, gy + d), D = iso(gx, gy + d);
+  const up = (p, k = h) => [p[0], p[1] - k];
+  const ctr = iso(gx + w / 2, gy + d / 2), top = up(ctr);
+  const lerp = (p, q, t) => [p[0] + (q[0] - p[0]) * t, p[1] + (q[1] - p[1]) * t];
+  // accent band along the top of both side faces
+  const band = (P, Q) => pts([up(P), up(Q), up(Q, h - 5), up(P, h - 5)]);
+  // chamber window on the right face
+  const win = pts([up(lerp(B, C, .3), h * .7), up(lerp(B, C, .7), h * .7), up(lerp(B, C, .7), h * .3), up(lerp(B, C, .3), h * .3)]);
+  const pole = up(iso(gx + w - 0.18, gy + 0.18));
+  const rx = Math.min(15, w * 11), ry = rx / 2;
+  return `<g class="tool idle" id="tool-${id}" data-tool="${id}" role="button" tabindex="0" aria-label="${c.name}">
+    <ellipse class="halo" cx="${ctr[0]}" cy="${ctr[1]}" rx="${(w + d) * TW * .6}" ry="${(w + d) * TH * .6}"/>
+    <polygon class="f-l" points="${pts([D, C, up(C), up(D)])}"/>
+    <polygon class="f-r" points="${pts([B, C, up(C), up(B)])}"/>
+    <polygon points="${band(D, C)}" fill="${c.accent}"/>
+    <polygon points="${band(B, C)}" fill="${c.accent}" opacity=".8"/>
+    <polygon class="window" points="${win}"/>
+    <polygon class="f-top" points="${pts([up(A), up(B), up(C), up(D)])}"/>
+    <text class="face-label" transform="matrix(1,0.5,0,1,${D[0].toFixed(1)},${(D[1] - h / 2 + 5).toFixed(1)})" x="6" y="0">${c.short}</text>
+    <ellipse class="wafer" cx="${top[0]}" cy="${top[1]}" rx="${rx}" ry="${ry}" fill="url(#si)"/>
+    <rect class="pbar-bg" x="${top[0] - 18}" y="${top[1] - 20}" width="36" height="4" rx="2"/>
+    <rect class="pbar" id="pb-${id}" x="${top[0] - 18}" y="${top[1] - 20}" width="0" height="4" rx="2"/>
+    <line class="pole" x1="${pole[0]}" y1="${pole[1]}" x2="${pole[0]}" y2="${pole[1] - 12}"/>
+    <circle class="lamp" cx="${pole[0]}" cy="${pole[1] - 15}" r="3.8"/>
+  </g>`;
+}
+
+function isEligible(id) {
+  const lot = s.selectedLot && lotById(s.selectedLot);
+  return !!lot && ROUTE[lot.step].tool === id && s.tools[id].status === 'idle';
+}
+function renderFloor() {
+  for (const id in TOOLS) {
+    const g = document.getElementById('tool-' + id), t = s.tools[id];
+    const cls = {idle:'idle', run:'running', down:'down', maint:'maint'}[t.status];
+    const want = `tool ${cls}${isEligible(id) ? ' eligible' : ''}${s.selectedTool === id ? ' picked' : ''}`;
+    if (g.getAttribute('class') !== want) g.setAttribute('class', want);
+    if (t.status === 'run') document.getElementById('pb-' + id).setAttribute('width', (36 * clamp(t.progress, 0, 1)).toFixed(1));
+    g.setAttribute('aria-label', `${TOOLS[id].name}, ${statusWord(id)}`);
+  }
+}
+function statusWord(id) {
+  const t = s.tools[id];
+  if (t.status === 'run') return `running ${t.lot}, ${Math.round(t.progress * 100)}%`;
+  if (t.status === 'down') return 'down';
+  if (t.status === 'maint') return `in maintenance, ${fmtDur(t.maint)} left`;
+  return 'idle';
+}
+
+function clockText() {
+  const shiftStart = (s.shift - 1) * SHIFT_MIN;
+  const day = s.shift % 2 === 1;
+  const tod = ((day ? 7 * 60 : 19 * 60) + (s.t - shiftStart)) % 1440;
+  const hh = String(Math.floor(tod / 60)).padStart(2, '0'), mm = String(Math.floor(tod % 60)).padStart(2, '0');
+  return `${day ? 'Day' : 'Night'} shift ${s.shift}, ${hh}:${mm}`;
+}
+function renderTop() {
+  $('#clock').textContent = clockText();
+  const cash = $('#cash'); cash.textContent = fmtMoney(s.cash); cash.classList.toggle('neg', s.cash < 0);
+}
+function renderSpeed() {
+  document.querySelectorAll('[data-speed]').forEach(b => b.setAttribute('aria-pressed', String(+b.dataset.speed === s.speed)));
+}
+
+// Lot cards are keyed by lot id and patched in place.
+function lotSortKey(l) { return (l.status === 'metro' ? 0 : l.status === 'queue' ? 1 : 2) * 1e6 + (l.hot ? 0 : 5e5) + l.due; }
+function lotCardHtml(lot) {
+  const step = ROUTE[lot.step], tool = TOOLS[step.tool];
+  let what;
+  if (lot.status === 'metro') what = `Review ${TOOLS[lot.pending.tool].short.toLowerCase()} metrology`;
+  else if (lot.status === 'running') what = `In the ${tool.short.toLowerCase()}, ${Math.round(s.tools[lot.tool].progress * 100)}%`;
+  else what = `Next: ${step.label}${lot.addDepth ? ' (re-etch)' : lot.cmpCarry ? ' (touch-up)' : ''}`;
+  const left = lot.due - s.t;
+  let q = '';
+  if (lot.qStart !== null && lot.status === 'queue') {
+    const rem = QTIME_MIN - (s.t - lot.qStart), frac = clamp(rem / QTIME_MIN, 0, 1);
+    q = `<div class="qbar ${frac < .25 ? 'bad' : frac < .5 ? 'warn' : ''}" title="Q-time left"><i style="width:${(frac * 100).toFixed(0)}%"></i></div>
+         <span class="due">Furnace within ${fmtDur(rem)}</span>`;
+  }
+  return `<span class="id">${lot.id}${lot.hot ? '<span class="hot">Hot</span>' : ''}</span>
+    <span class="what">${what}</span>
+    <span class="due ${left < 0 ? 'late' : ''}">${left < 0 ? 'Late by ' + fmtDur(-left) : 'Due in ' + fmtDur(left)}</span>${q}`;
+}
+function renderLots() {
+  const wrap = $('#lots');
+  const lots = s.lots.slice().sort((a, b) => lotSortKey(a) - lotSortKey(b));
+  const keep = new Set();
+  lots.forEach((lot, i) => {
+    let el = wrap.querySelector(`[data-lot="${lot.id}"]`);
+    if (!el) { el = document.createElement('button'); el.className = 'lot'; el.dataset.lot = lot.id; }
+    const html = lotCardHtml(lot);
+    if (el._html !== html) { el.innerHTML = html; el._html = html; }
+    const cls = `lot ${lot.status}${s.selectedLot === lot.id ? ' sel' : ''}`;
+    if (el.className !== cls) el.className = cls;
+    if (wrap.children[i] !== el) wrap.insertBefore(el, wrap.children[i] || null);
+    keep.add(lot.id);
+  });
+  [...wrap.children].forEach(el => { if (!keep.has(el.dataset.lot)) el.remove(); });
+  $('#lotsEmpty').hidden = lots.length > 0;
+  const q = lots.filter(l => l.status === 'queue').length, m = lots.filter(l => l.status === 'metro').length;
+  $('#lotsSummary').textContent = `${lots.length} on the line, ${q} waiting, ${m} to review`;
+}
+
+// ----- side panel -----
+function renderPanel() {
+  panelDirty = false;
+  const p = $('#panel');
+  const lot = s.selectedLot && lotById(s.selectedLot);
+  if (lot) p.innerHTML = lotPanelHtml(lot);
+  else if (s.selectedTool) p.innerHTML = toolPanelHtml(s.selectedTool);
+  else p.innerHTML = idlePanelHtml();
+}
+function idlePanelHtml() {
+  const lessons = s.lessons.length
+    ? `<h3>Drift signatures you've diagnosed</h3>${s.lessons.map(l => `<p class="lesson"><strong>${TOOLS[l.tool].short}: ${l.name}.</strong> ${l.sig}</p>`).join('')}`
+    : '';
+  return `<h2>Fab floor</h2>
+    <p class="status">Tap a lot, then tap the glowing tool to load it. Tap a tool on its own to set its recipe, read its SPC chart, or pull it for maintenance.</p>
+    <p class="note">The stepper serves three litho layers and the etcher two. The furnace has to take cleaned lots within 2 hours. CMP depends on how each wafer plated. Every tool except clean will drift sooner or later.</p>
+    ${lessons}`;
+}
+function lotPanelHtml(lot) {
+  const need = ROUTE[lot.step].tool;
+  const left = lot.due - s.t;
+  const steps = ROUTE.map((st, i) => {
+    const r = lot.results[i];
+    const res = r ? Object.entries(r.means).map(([m, v]) => `${METRICS[m].label.toLowerCase()} ${fmtVal(m, v)}`).join(', ') : '';
+    const cls = i < lot.step ? 'done' : i === lot.step ? 'now' : '';
+    return `<li class="${cls}"><span>${st.label}</span><span class="res">${TOOLS[st.tool].name}${res ? '. ' + res : ''}</span></li>`;
+  }).join('');
+  return `<h2>${lot.id}${lot.hot ? ' (hot lot)' : ''}</h2>
+    <p class="status">${left < 0 ? 'Late by ' + fmtDur(-left) : 'Due in ' + fmtDur(left)}. Worth ${fmtMoney(lot.value)} at 100% yield.</p>
+    <p class="note">Tap the ${TOOLS[need].name.toLowerCase()} on the floor to load this lot. ${s.tools[need].status !== 'idle' ? `It's ${statusWord(need)} right now.` : ''}</p>
+    <ol class="route">${steps}</ol>
+    <div class="actions"><button class="btn" data-act="deselect">Done</button></div>`;
+}
+const stepsOf = id => ROUTE.map((st, i) => st.tool === id ? i : -1).filter(i => i >= 0);
+// Which layer (route step) the tool panel is showing
+function layerOf(id) {
+  const steps = stepsOf(id);
+  if (!steps.includes(s.layer[id])) s.layer[id] = steps[0];
+  return s.layer[id];
+}
+function layerPicker(id) {
+  const steps = stepsOf(id);
+  if (steps.length < 2) return '';
+  const L = layerOf(id);
+  return `<div class="layers" role="group" aria-label="Layer">${steps.map(i =>
+    `<button class="chip" data-layer="${i}" aria-pressed="${i === L}">${ROUTE[i].label}</button>`).join('')}</div>`;
+}
+function toolPanelHtml(id) {
+  const c = TOOLS[id];
+  const head = `<h2>${c.name}</h2><p class="status" id="toolStatus">${statusWord(id)[0].toUpperCase() + statusWord(id).slice(1)}</p>`;
+  if (id === 'CLEAN') {
+    return head + `<p class="note">Fixed recipe: SC1, SC2, then an HF dip. It runs 20 minutes and never drifts in this version.</p>
+      <p class="note">The clock starts when a lot leaves here: it must start oxidation within ${fmtDur(QTIME_MIN)} or it comes back for another clean.</p>`;
+  }
+  const tabs = [['recipe', 'Recipe'], ['spc', 'SPC'], ['maint', 'Maintenance']]
+    .map(([k, label]) => `<button class="tab" role="tab" data-tab="${k}" aria-selected="${s.tab === k}">${label}</button>`).join('');
+  const body = s.tab === 'spc' ? spcHtml(id) : s.tab === 'maint' ? maintHtml(id) : recipeHtml(id);
+  return head + `<div class="tabs" role="tablist">${tabs}</div>${body}`;
+}
+function recipeHtml(id) {
+  const c = TOOLS[id], t = s.tools[id], L = layerOf(id), r = s.recipes[L];
+  const locked = t.locked ? `<div class="locked">Locked on ${t.lot}: ${recipeText(id, t.locked)}.</div>` : '';
+  const sliders = c.params.map(k => {
+    const P = PARAMS[k];
+    return `<label class="slider"><span>${P.label}</span><output id="out-${k}">${fmtParam(k, r[k])}</output>
+      <input type="range" data-param="${k}" min="${P.min}" max="${P.max}" step="${P.step}" value="${r[k]}"></label>`;
+  }).join('');
+  return `${locked}${layerPicker(id)}<p class="note">${stepsOf(id).length > 1 ? 'Each layer keeps its own recipe. ' : ''}Changes apply to the next lot you load.
+    Predictions assume a healthy tool, and a drifting one won't match them.</p>
+    ${sliders}<h3>Predicted lot mean</h3><div class="pred" id="pred">${predHtml(id, L)}</div>
+    <div class="actions"><button class="btn" data-act="reset-recipe">Reset to baseline</button></div>`;
+}
+function predHtml(id, step) {
+  const phys = PHYSICS[id](s.recipes[step], {id:null, s:0}, {step, lot:null, plateStep:PLATE_STEP});
+  const rows = TOOLS[id].metrics.map(m => {
+    const v = phys[m];
+    return `<div class="prow"><span>${METRICS[m].label} <span class="note">(${specText(m, step)})</span></span>
+      <strong class="st-${judge(m, v, step)}">${fmtVal(m, v)}</strong></div>`;
+  }).join('');
+  return rows + (id === 'CMP' ? `<p class="note">Assumes nominal plating: 900 nm with 1.6% uniformity. Real lots bring their own thickness.</p>` : '');
+}
+function spcHtml(id) {
+  const t = s.tools[id], L = layerOf(id);
+  const charts = TOOLS[id].metrics.map(m =>
+    `<div class="spc"><div class="lab"><span>${METRICS[m].label}</span><span class="note">${specText(m, L)}</span></div>${spcSvg(m, t.spc[L][m], L)}</div>`).join('');
+  return `${layerPicker(id)}<p class="note">Each point is the sample mean of one lot on this layer, oldest on the left. A steady walk toward a limit is drift, not noise.</p>${charts}`;
+}
+function spcSvg(m, series, step) {
+  const M = spec(m, step), W = 320, H = 86, [lo, hi] = plotRange(m, step);
+  const X = i => 10 + i * (W - 20) / 23, Y = v => H - 8 - (clamp(v, lo, hi) - lo) / (hi - lo) * (H - 16);
+  let g = '';
+  if (M.oneSided !== 'max') g += `<line class="lim" x1="0" x2="${W}" y1="${Y(M.lsl)}" y2="${Y(M.lsl)}"/>`;
+  if (M.oneSided !== 'min') g += `<line class="lim" x1="0" x2="${W}" y1="${Y(M.usl)}" y2="${Y(M.usl)}"/>`;
+  g += `<line class="tgt" x1="0" x2="${W}" y1="${Y(M.target)}" y2="${Y(M.target)}"/>`;
+  if (series.length > 1) g += `<polyline class="trace" points="${series.map((v, i) => `${X(i)},${Y(v).toFixed(1)}`).join(' ')}"/>`;
+  series.forEach((v, i) => { g += `<circle cx="${X(i)}" cy="${Y(v).toFixed(1)}" r="3" class="st-${judge(m, v, step)}" fill="currentColor"/>`; });
+  if (!series.length) g += `<text x="${W / 2}" y="${H / 2}" text-anchor="middle" font-size="12" fill="currentColor" opacity=".6">No lots measured yet</text>`;
+  return `<svg viewBox="0 0 ${W} ${H}" role="img" aria-label="${M.label} control chart">${g}</svg>`;
+}
+function maintHtml(id) {
+  const c = TOOLS[id], t = s.tools[id];
+  if (t.status === 'run') return `<p class="note">Wait for ${t.lot} to finish before taking the tool down.</p>`;
+  if (t.status === 'maint') return `<p class="note">Maintenance in progress. ${fmtDur(t.maint)} left.</p>`;
+  const down = t.status === 'down';
+  const fixCost = down ? FIX_AFTER_ALARM : FIX_EARLY;
+  return `<p class="note">${down ? 'The tool is down. Find the cause to bring it back.' : 'Pull the tool now if the SPC chart shows drift. Fixing a drift before it alarms costs less.'}
+      Right part: ${fmtMoney(fixCost)} and 40 minutes. Wrong part: ${fmtMoney(WRONG_PART)} and 30 minutes, and the problem stays.</p>
+    <div class="stack">
+      <button class="btn" data-act="maint" data-choice="qual"><span>Run a qual wafer</span><span>${fmtMoney(QUAL_COST)}, 15m</span></button>
+      ${c.faults.map(f => `<button class="btn" data-act="maint" data-choice="${f.id}"><span>Replace: ${f.name}</span><span>${fmtMoney(fixCost)}</span></button>`).join('')}
+    </div>`;
+}
+
+// ----- dialogs -----
+function openModal(html) {
+  const m = $('#modal');
+  m.innerHTML = `<div class="dialog" role="dialog" aria-modal="true">${html}</div>`;
+  m.hidden = false; modalOpen = true;
+  const first = m.querySelector('.btn.primary') || m.querySelector('button');
+  if (first) first.focus({preventScroll:true});
+}
+function closeModal() { $('#modal').hidden = true; modalOpen = false; reviewLotId = null; }
+
+// Short messages at the bottom of the screen. kind: '' | 'ok' | 'warn' | 'bad'
+function toast(msg, kind = '') {
+  const box = $('#toasts'), el = document.createElement('div');
+  el.className = 'toast ' + kind; el.textContent = msg;
+  box.appendChild(el);
+  while (box.children.length > 3) box.firstChild.remove();
+  setTimeout(() => el.remove(), kind === 'bad' ? 6500 : 4200);
+}
+
+function stripSvg(m, vals, mean, step) {
+  const M = spec(m, step), W = 320, H = 30, [lo, hi] = plotRange(m, step);
+  const X = v => 8 + (clamp(v, lo, hi) - lo) / (hi - lo) * (W - 16);
+  const x1 = X(M.oneSided === 'max' ? lo : M.lsl), x2 = X(M.oneSided === 'min' ? hi : M.usl);
+  let g = `<rect class="band" x="${x1}" y="2" width="${x2 - x1}" height="${H - 4}"/>
+    <line class="axis" x1="8" x2="${W - 8}" y1="${H / 2}" y2="${H / 2}"/>
+    <line class="tgt" x1="${X(M.target)}" x2="${X(M.target)}" y1="4" y2="${H - 4}"/>`;
+  vals.forEach((v, i) => { g += `<circle class="dot" cx="${X(v).toFixed(1)}" cy="${(H / 2 + ((i % 5) - 2) * 2.4).toFixed(1)}" r="2.6" opacity=".75"/>`; });
+  g += `<line class="mean" x1="${X(mean)}" x2="${X(mean)}" y1="3" y2="${H - 3}"/>`;
+  return `<svg class="strip" viewBox="0 0 ${W} ${H}" aria-hidden="true">${g}</svg>`;
+}
+function reviewHtml(lot) {
+  const p = lot.pending, c = TOOLS[p.tool], n = p.sample.length;
+  const rows = c.metrics.map(m => {
+    const vals = p.measured[m].map(x => x.v), mean = avg(vals);
+    return `<div class="mrow"><div class="mhead"><span class="mname">${METRICS[m].label}</span>
+      <span class="spec">${specText(m, p.step)}</span>
+      <strong class="st-${judge(m, mean, p.step)}">${fmtVal(m, mean)} <small>${METRICS[m].unit}</small></strong></div>
+      ${stripSvg(m, vals, mean, p.step)}</div>`;
+  }).join('');
+  const rw = reworkRule(lot);
+  return `<h2>${lot.id} at the ${c.short.toLowerCase()}${lot.hot ? ' (hot lot)' : ''}</h2>
+    <p class="sub">${ROUTE[p.step].label}. ${n === LOT_SIZE ? 'All 25 wafers measured.' : `Measured slots ${p.sample.map(i => i + 1).join(', ')} of 25. The rest of the lot is unmeasured.`}</p>
+    ${rows}
+    <p class="recipe">Ran with ${recipeText(p.tool, p.recipe)}.</p>
+    ${n < LOT_SIZE ? `<div class="actions"><button class="btn" data-act="measure-all">Measure all 25 wafers (${fmtMoney(FULL_METRO_COST)})</button></div>` : ''}
+    <div class="actions">
+      <button class="btn primary" data-act="accept">Accept</button>
+      <button class="btn" data-act="rework" ${rw.ok ? '' : 'disabled'}>Rework</button>
+      <button class="btn danger" data-act="scrap">Scrap</button>
+    </div>
+    <p class="hint">${rw.text}</p>`;
+}
+function helpHtml() {
+  return `<h2>How to play</h2>
+    <p class="sub">You run a small fab line. Every lot of 25 wafers goes through the front end
+      (clean, oxidation, litho 1, trench etch, litho 2, implant), then the back end
+      (ILD deposition, litho 3, ILD trench etch, copper plating, copper CMP), then ships.</p>
+    <ul>
+      <li>Tap a lot, then tap the glowing tool to load it. The tool's recipe locks the moment the lot loads.</li>
+      <li>After each step, three wafers are measured. Accept, rework, or scrap. Three wafers aren't the whole lot, and the gauge has noise of its own.</li>
+      <li>The stepper handles all three litho layers and the etcher handles two. Each layer keeps its own recipe, so check which layer you're editing.</li>
+      <li>CMP polishes each wafer against what plating left on it. Polish too little and copper residue shorts the lines; too long and the lines dish.</li>
+      <li>A cleaned lot has 2 hours to start oxidation, or it goes back to clean.</li>
+      <li>Tools drift. Watch each tool's SPC chart and pull it for maintenance before it alarms. Replacing the wrong part costs you.</li>
+      <li>Hot lots pay double but are due sooner. Late lots lose 30% of their value.</li>
+    </ul>
+    <div class="actions"><button class="btn primary" data-act="close">${s.seenIntro ? 'Back to the floor' : 'Start the shift'}</button>
+      <button class="btn danger" data-act="new-game">Start over</button></div>`;
+}
+
+function renderAll() { renderTop(); renderSpeed(); renderFloor(); renderLots(); renderPanel(); }
+
+// Keep live numbers fresh without rebuilding sliders under the player's finger
+function refreshPanelLive() {
+  if (panelDirty && !(s.selectedTool && s.tab === 'recipe' && !s.selectedLot)) { renderPanel(); return; }
+  const st = document.getElementById('toolStatus');
+  if (st && s.selectedTool) { const w = statusWord(s.selectedTool); st.textContent = w[0].toUpperCase() + w.slice(1); }
+  if (panelDirty && s.selectedTool && s.tab === 'recipe') {
+    // status changed (e.g. run finished): refresh only the locked-recipe line
+    const t = s.tools[s.selectedTool], box = document.querySelector('.locked');
+    if (!t.locked && box) box.remove();
+    panelDirty = false;
+  }
+}
+
+/* ---------------------------- 7. INPUT ----------------------------------- */
+function onToolTap(id) {
+  const lot = s.selectedLot && lotById(s.selectedLot);
+  if (lot) {
+    const need = ROUTE[lot.step].tool;
+    if (need !== id) { toast(`${lot.id} needs the ${TOOLS[need].name.toLowerCase()} next.`); return; }
+    if (s.tools[id].status !== 'idle') { toast(`The ${TOOLS[id].short.toLowerCase()} is ${statusWord(id)}. ${lot.id} stays in queue.`); return; }
+    loadLot(lot, id);
+    toast(`${lot.id} loaded. Recipe locked: ${recipeText(id, s.tools[id].locked)}.`);
+    s.selectedLot = null; s.selectedTool = id;
+  } else {
+    s.selectedTool = s.selectedTool === id ? null : id;
+    if (s.selectedTool && !TOOLS[id].params.length) s.tab = 'recipe';
+  }
+  renderAll();
+  if (s.selectedTool && window.innerWidth < 960) {
+    const reduce = matchMedia('(prefers-reduced-motion: reduce)').matches;
+    $('#panel').scrollIntoView({behavior:reduce ? 'auto' : 'smooth', block:'start'});
+  }
+}
+function onLotTap(id) {
+  const lot = lotById(id); if (!lot) return;
+  if (lot.status === 'metro') { reviewLotId = id; openModal(reviewHtml(lot)); return; }
+  if (lot.status === 'running') { s.selectedLot = null; s.selectedTool = lot.tool; renderAll(); return; }
+  s.selectedLot = s.selectedLot === id ? null : id;
+  s.selectedTool = null;
+  renderAll();
+}
+
+function wireInput() {
+  $('#floor').addEventListener('click', e => { const g = e.target.closest('.tool'); if (g) onToolTap(g.dataset.tool); });
+  $('#floor').addEventListener('keydown', e => {
+    const g = e.target.closest('.tool');
+    if (g && (e.key === 'Enter' || e.key === ' ')) { e.preventDefault(); onToolTap(g.dataset.tool); }
+  });
+  $('#lots').addEventListener('click', e => { const b = e.target.closest('.lot'); if (b) onLotTap(b.dataset.lot); });
+  document.querySelectorAll('[data-speed]').forEach(b => b.addEventListener('click', () => { s.speed = +b.dataset.speed; renderSpeed(); }));
+  $('#startLot').addEventListener('click', () => {
+    const lot = releaseLot(false);
+    toast(`${lot.id} released to the clean bench. −${fmtMoney(WAFER_COST)}`);
+    renderAll();
+  });
+  $('#helpBtn').addEventListener('click', () => openModal(helpHtml()));
+
+  $('#panel').addEventListener('click', e => {
+    const tab = e.target.closest('[data-tab]');
+    if (tab) { s.tab = tab.dataset.tab; renderPanel(); return; }
+    const lay = e.target.closest('[data-layer]');
+    if (lay) { s.layer[s.selectedTool] = +lay.dataset.layer; renderPanel(); return; }
+    const b = e.target.closest('[data-act]'); if (!b) return;
+    const act = b.dataset.act;
+    if (act === 'deselect') { s.selectedLot = null; renderAll(); }
+    if (act === 'maint') maintain(s.selectedTool, b.dataset.choice);
+    if (act === 'reset-recipe') { s.recipes[layerOf(s.selectedTool)] = defaultRecipe(s.selectedTool); renderPanel(); }
+  });
+  $('#panel').addEventListener('input', e => {
+    const k = e.target.dataset && e.target.dataset.param; if (!k || !s.selectedTool) return;
+    const L = layerOf(s.selectedTool);
+    s.recipes[L][k] = parseFloat(e.target.value);
+    $('#out-' + k).textContent = fmtParam(k, s.recipes[L][k]);
+    $('#pred').innerHTML = predHtml(s.selectedTool, L);
+  });
+
+  $('#modal').addEventListener('click', e => {
+    const b = e.target.closest('[data-act]'); if (!b || b.disabled) return;
+    const act = b.dataset.act;
+    if (['accept', 'rework', 'scrap', 'measure-all'].includes(act)) { decide(act); return; }
+    if (act === 'close') { s.seenIntro = true; closeModal(); renderAll(); }
+    if (act === 'next-shift') { s.shift++; s.ledger = newLedger(); s.speed = 1; closeModal(); renderAll(); save(); }
+    if (act === 'new-game') { newGame(); s.seenIntro = true; closeModal(); renderAll(); save(); }
+  });
+  document.addEventListener('keydown', e => {
+    if (e.key === 'Escape' && modalOpen && !reviewLotId && !$('#modal [data-act="next-shift"]')) { s.seenIntro = true; closeModal(); }
+    if (e.key === ' ' && !modalOpen && e.target === document.body) { e.preventDefault(); s.speed = s.speed ? 0 : 1; renderSpeed(); }
+  });
+}
+
+/* ---------------------------- 8. LOOP ------------------------------------ */
+let last = performance.now(), lastUi = 0, lastSave = 0;
+function frame(now) {
+  const realDt = Math.min(0.25, (now - last) / 1000); last = now;
+  if (s.speed > 0 && !modalOpen) {
+    let dt = realDt * MIN_PER_SEC * s.speed;
+    while (dt > 0) {
+      const h = Math.min(1, dt); dt -= h;
+      tick(h);
+      if (s.t >= s.shift * SHIFT_MIN) { endShift(); break; }
+    }
+    cleanupLots();
+  }
+  if (now - lastUi > 120) {             // ~8 UI refreshes a second is plenty
+    lastUi = now;
+    const sel = s.selectedLot && lotById(s.selectedLot);
+    if (s.selectedLot && (!sel || sel.status !== 'queue')) { s.selectedLot = null; panelDirty = true; }
+    renderTop(); renderFloor(); renderLots(); refreshPanelLive();
+  }
+  if (now - lastSave > 5000) { lastSave = now; save(); }
+  requestAnimationFrame(frame);
+}
+
+// Boot
+s = load();
+if (s) { s.speed = 0; } else { newGame(); }
+buildFloor();
+wireInput();
+renderAll();
+if (!s.seenIntro) openModal(helpHtml());
+else toast('Welcome back. The line is paused: press play when ready.');
+requestAnimationFrame(frame);
+</script>
+</body>
+</html>

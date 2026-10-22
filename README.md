@@ -1,4 +1,4 @@
 # FabSim
 
-An isometric, physics-grounded wafer fab simulator built as a roguelite.
-Start with CLAUDE.md (project rules) and ROADMAP.md (current milestone).
+An isometric, physics-grounded wafer fab simulator. `index.html` is the whole game: open it in a browser.
+For development, start with CLAUDE.md, PROJECT.md and ROADMAP.md.
