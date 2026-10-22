@@ -2,12 +2,12 @@
 
 Work top to bottom, one checkbox per session. Plan in `tasks/todo.md` first (see `PROJECT.md`). Tick the box here when done.
 
-Current milestone: **M0 — Move in**
+Current milestone: **M1 — Seeded RNG and test harness**
 
 ## M0 — Move in (week 1)
 - [x] Put `index.html` and the kit in a new GitHub repo; turn on GitHub Pages; confirm the live URL loads and plays on a phone
-- [ ] Play 2–3 shifts by hand and write down anything that feels wrong or unclear in `tasks/todo.md`
-- [ ] Run a first headless check: load the page, run one simulated shift with a simple bot, confirm no errors
+- [x] Play 2–3 shifts by hand and write down anything that feels wrong or unclear in `tasks/todo.md`
+- [x] Run a first headless check: load the page, run one simulated shift with a simple bot, confirm no errors
 
 ## M1 — Seeded RNG and test harness (week 2)
 - [ ] Add an `RNG` section (mulberry32); replace all 5 `Math.random()` calls; keep the seed in `s.seed`; show it on screen
