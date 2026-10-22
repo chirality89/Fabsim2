@@ -21,6 +21,7 @@ Code layout inside `index.html`'s `<script>`:
 
 ```
 1. CONFIG    every number that defines the game (costs, times, specs, TOOLS, ROUTE, PARAMS, METRICS)
+1b. RNG      the one seeded generator: rand(), seedFromUrl(), newSeed()
 2. PHYSICS   PHYSICS.<TOOL>(recipe, fault, ctx) → true lot-mean values
 3. HELPERS   random numbers, formatting, spec judging
 4. STATE     the one object `s` holding the whole game; newGame, save, load
@@ -105,10 +106,10 @@ David is a semiconductor fab / packaging engineer (deep domain expert) and a **J
 
 ## 7. Seeded randomness
 
-Today `Math.random()` appears in 5 places: `gauss`, `expRand`, `pick`, the first hot-lot time in `newGame`, and hot-lot spacing in `tick`. The target is **one seeded generator**.
+Done in M1: the `RNG` section (section 1b) holds one seeded generator (mulberry32). Every random number comes from `rand()`, directly or through `gauss`, `expRand` and `pick`. The seed is in `s.seed`, the generator's state is in `s.rngState` (both saved), and the seed shows in the top bar. A link ending in `?seed=123456` starts that seed.
 
-- M1 adds an `RNG` section with a small seeded generator (mulberry32), stores `s.seed` in the saved state, shows the seed on screen, and replaces every `Math.random()`.
-- **Until then, add no new `Math.random()` calls.**
+- **Never add `Math.random()`.** Use `rand()` or the helpers.
+- Physics and predictions still draw random numbers inside `PHYSICS.ETCH` and `PHYSICS.CMP` until M1 item 2 moves that noise to an input.
 - Same seed → same run. This enables reproducible bug reports, the daily seed and the playtest bot. Always include the seed when reporting a bug or test failure.
 
 ## 8. Content and public information

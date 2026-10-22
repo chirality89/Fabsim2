@@ -54,6 +54,7 @@ p{margin:0}
   display:flex;flex-wrap:wrap;align-items:center;gap:8px 16px;padding:10px 14px;border-bottom:1px solid var(--line)}
 .brand{font:600 26px/1 var(--cond);margin:0}
 .clock{font:500 17px/1 var(--cond);color:var(--muted)}
+.seed{font:500 14px/1 var(--cond);color:var(--muted)}
 .cash{font:600 22px/1 var(--cond);margin-left:auto}
 .cash.neg{color:var(--bad)}
 .controls{display:flex;gap:8px;align-items:center;width:100%}
@@ -216,6 +217,7 @@ main{display:grid;max-width:1280px;margin:0 auto}
 <header class="bar">
   <h1 class="brand">FabSim</h1>
   <span class="clock" id="clock">Day shift 07:00</span>
+  <span class="seed" id="seed" title="Same seed, same run. Add ?seed=123456 to the address to replay one."></span>
   <span class="cash" id="cash">$20,000</span>
   <div class="controls">
     <div class="seg" role="group" aria-label="Game speed">
@@ -250,6 +252,7 @@ main{display:grid;max-width:1280px;margin:0 auto}
    FabSim v2 — single-file vanilla JavaScript.
    Read it top to bottom:
      1. CONFIG    — every number that defines the game
+     1b. RNG      — the one seeded random number generator
      2. PHYSICS   — pure functions: recipe in, true lot means out
      3. HELPERS   — random numbers, formatting, spec judgement
      4. STATE     — the one object `s` that holds the whole game
@@ -274,7 +277,7 @@ const FULL_METRO_COST = 150, LITHO_REWORK_COST = 150;
 const MTBF_MIN      = 720;    // mean time until a tool starts drifting
 const DRIFT_RAMP_MIN = 200;   // drift grows from nothing to a hard alarm over this long
 const FIX_EARLY = 300, FIX_AFTER_ALARM = 600, WRONG_PART = 750, QUAL_COST = 100;
-const SAVE_KEY = 'fabsim-v3';
+const SAVE_KEY = 'fabsim-v4';   // v4: the save now carries the seed and the generator's state
 
 // Recipe knobs. Keys are unique across tools so a recipe is just {key: value}.
 const PARAMS = {
@@ -396,6 +399,27 @@ const ROUTE = [
 ];
 const PLATE_STEP = ROUTE.findIndex(st => st.tool === 'PLATE');
 
+/* ---------------------------- 1b. RNG ------------------------------------ */
+// The one random number generator in the game (mulberry32). It starts from a seed,
+// so the same seed always gives the same sequence of numbers.
+// Its whole memory is one whole number, s.rngState, which is saved with the game.
+function rand() {   // → a number from 0 up to (not including) 1
+  s.rngState = (s.rngState + 0x6D2B79F5) >>> 0;
+  let t = s.rngState;
+  t = Math.imul(t ^ (t >>> 15), t | 1);
+  t ^= t + Math.imul(t ^ (t >>> 7), t | 61);
+  return ((t ^ (t >>> 14)) >>> 0) / 4294967296;
+}
+// The seed for a new game: from the address if it ends in ?seed=123456, else from the clock
+function seedFromUrl() {
+  const n = Number(new URLSearchParams(location.search).get('seed') || NaN);
+  return Number.isInteger(n) && n >= 0 && n < 2 ** 32 ? n : null;
+}
+function newSeed() {
+  const fromUrl = seedFromUrl();
+  return fromUrl !== null ? fromUrl : Date.now() % 1000000;
+}
+
 /* ---------------------------- 2. PHYSICS --------------------------------- */
 // Each function takes a locked recipe and the tool's hidden fault ({id, s}, s = 0..1)
 // and returns the TRUE lot-mean values. The player never sees these directly.
@@ -510,10 +534,10 @@ const PHYSICS = {
 
 /* ---------------------------- 3. HELPERS --------------------------------- */
 const $ = sel => document.querySelector(sel);
-function gauss() { let u = 0, v = 0; while (!u) u = Math.random(); while (!v) v = Math.random();
+function gauss() { let u = 0, v = 0; while (!u) u = rand(); while (!v) v = rand();
   return Math.sqrt(-2 * Math.log(u)) * Math.cos(2 * Math.PI * v); }
-const expRand = mean => -Math.log(1 - Math.random()) * mean;
-const pick = arr => arr[Math.floor(Math.random() * arr.length)];
+const expRand = mean => -Math.log(1 - rand()) * mean;
+const pick = arr => arr[Math.floor(rand() * arr.length)];
 const avg = arr => arr.reduce((a, b) => a + b, 0) / arr.length;
 const clamp = (v, lo, hi) => Math.min(hi, Math.max(lo, v));
 function fmtMoney(n) { return (n < 0 ? '−' : '') + '$' + Math.abs(Math.round(n)).toLocaleString('en-US'); }
@@ -582,11 +606,12 @@ function newLedger() {
   return {revenue:0, wafers:0, process:0, metro:0, rework:0, maint:0, penalty:0,
           shipped:0, onTime:0, yieldSum:0, scrapped:0, alarms:0, early:0, qfails:0};
 }
-function newGame() {
-  s = {v:3, t:0, shift:1, cash:START_CASH, speed:1, lots:[], nextLot:1001, tools:{},
+function newGame(seed = newSeed()) {
+  s = {v:4, seed, rngState:seed, t:0, shift:1, cash:START_CASH, speed:1, lots:[], nextLot:1001, tools:{},
        recipes:{}, layer:{},   // recipes live on route steps, not tools: each layer has its own
-       ledger:newLedger(), nextHotAt:150 + Math.random() * 150, lessons:[],
+       ledger:newLedger(), nextHotAt:0, lessons:[],
        selectedLot:null, selectedTool:null, tab:'recipe', seenIntro:false};
+  s.nextHotAt = 150 + rand() * 150;   // set after s exists, because rand() keeps its state in s
   for (const id in TOOLS)
     s.tools[id] = {locked:null, lot:null, status:'idle', progress:0, dur:0,
                    maint:0, maintThen:null, fault:null, spc:{}, nextFaultAt:150 + expRand(MTBF_MIN)};
@@ -600,7 +625,7 @@ function newGame() {
 function save() { try { localStorage.setItem(SAVE_KEY, JSON.stringify(s)); } catch (e) {} }
 function load() {
   try { const o = JSON.parse(localStorage.getItem(SAVE_KEY) || 'null');
-        if (o && o.v === 3 && o.tools && o.lots) return o; } catch (e) {}
+        if (o && o.v === 4 && Number.isInteger(o.rngState) && o.tools && o.lots) return o; } catch (e) {}
   return null;
 }
 const lotById = id => s.lots.find(l => l.id === id);
@@ -811,7 +836,7 @@ function tick(h) {
   if (s.t >= s.nextHotAt) {
     const lot = releaseLot(true);
     toast(`Hot lot ${lot.id} arrived. Customer wafers, double value, due in ${fmtDur(HOT_DUE_MIN)}.`, 'bad');
-    s.nextHotAt = s.t + 200 + Math.random() * 220;
+    s.nextHotAt = s.t + 200 + rand() * 220;
   }
 }
 function cleanupLots() { s.lots = s.lots.filter(l => l.status !== 'shipped' && l.status !== 'scrapped'); }
@@ -942,6 +967,7 @@ function clockText() {
 }
 function renderTop() {
   $('#clock').textContent = clockText();
+  $('#seed').textContent = `Seed ${s.seed}`;
   const cash = $('#cash'); cash.textContent = fmtMoney(s.cash); cash.classList.toggle('neg', s.cash < 0);
 }
 function renderSpeed() {
@@ -1287,6 +1313,9 @@ function frame(now) {
 
 // Boot
 s = load();
+// A ?seed= link that differs from the saved game starts that seed fresh
+const linkSeed = seedFromUrl();
+if (s && linkSeed !== null && s.seed !== linkSeed) s = null;
 if (s) { s.speed = 0; } else { newGame(); }
 buildFloor();
 wireInput();

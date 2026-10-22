@@ -10,7 +10,7 @@ Current milestone: **M1 — Seeded RNG and test harness**
 - [x] Run a first headless check: load the page, run one simulated shift with a simple bot, confirm no errors
 
 ## M1 — Seeded RNG and test harness (week 2)
-- [ ] Add an `RNG` section (mulberry32); replace all 5 `Math.random()` calls; keep the seed in `s.seed`; show it on screen
+- [x] Add an `RNG` section (mulberry32); replace all 5 `Math.random()` calls; keep the seed in `s.seed`; show it on screen
 - [ ] Move the `gauss()` calls inside `PHYSICS.ETCH` and `PHYSICS.CMP` onto the seeded generator
 - [ ] Playwright set up (`@playwright/test`, `tests/`); first physics test with one textbook value from David
 - [ ] Physics checks for each model with David's textbook values
