@@ -14,7 +14,7 @@ This kit is built around your single-file FabSim v2 (the isometric fab with 8 to
    gh repo create fabsim2 --public --source=. --push
    ```
    Or create an empty repo `fabsim2` on github.com and follow its push instructions.
-3. Turn on GitHub Pages: repo **Settings → Pages → Deploy from a branch → `main` / `/ (root)`**. After a minute the game is live at `https://chirality89.github.io/fabsim2/`.
+3. Turn on GitHub Pages: repo **Settings → Pages → Deploy from a branch → `main` / `/ (root)`**. After a minute the game is live at `https://chirality89.github.io/Fabsim2/ (the address is case-sensitive: capital F)`.
 4. Open Claude Code in the `fabsim2` folder.
 
 ## First prompt
