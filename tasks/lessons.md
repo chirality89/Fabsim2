@@ -40,3 +40,15 @@ A scripted find-and-replace looked for "Does the How to play box…" but the fil
 ### Rule to Prevent
 ✅ After any scripted text edit, check the diff shows the new text before committing or reporting it as done
 ✅ Prefer the Edit tool for notes, since it fails loudly when the old text isn't found
+
+## Phone screenshot silently came out at desktop size
+
+### What Happened
+In the M1 item 1 checks, the "phone" screenshots came out at 1280×720. The script asked Playwright for the phone preset `devices['iPhone 13 mini']`.
+
+### Root Cause
+That preset name doesn't exist in this Playwright version. The lookup returned nothing, so the browser fell back to its default desktop window without any error.
+
+### Rule to Prevent
+✅ Give phone screenshots an explicit size: `viewport: {width: 375, height: 812}, isMobile: true, hasTouch: true`
+✅ Check every screenshot's pixel size before judging it (375 px wide at 2× = 750 px)

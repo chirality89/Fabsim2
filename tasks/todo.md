@@ -2,7 +2,28 @@
 
 ## Current: M1 — Seeded RNG and test harness
 
-### Task: M1 item 1 — one seeded random generator (PLAN, waiting for David's OK)
+### Task: M1 item 1 — one seeded random generator (DONE 2026-10-22)
+
+David approved the plan as written, with all three proposals: seed from the clock or `?seed=`; old saves start over once; seed shown in the top bar.
+
+**Result:**
+- [x] `Math.random` appears nowhere in `index.html` (0 hits)
+- [x] Same seed twice (12345) gives an identical shift: ledger, cash, fault states and lessons all match ($33,491, 12 shipped, 2 alarms). A different seed (777) differs ($22,052, 10 shipped, 4 alarms)
+- [x] Seed shows in the top bar and survives a reload, generator state included
+- [x] An old v3 save (under the old key, and a v3-shaped save under the new key) is ignored: fresh game, no errors
+- [x] The game runs with localStorage blocked (every storage call throwing)
+- [x] `?seed=banana` falls back to a clock seed; a `?seed=` link that differs from the saved game starts that seed
+- [x] Screenshots: desktop 1280×800 and phone 375×812 with Playwright phone emulation. The seed fits on the top row next to the clock and cash on the phone, and the How to play box fits
+- [x] No console errors; no lines inside PHYSICS changed
+- Checks ran from a throwaway script outside the repo (`verify-m1-rng.js`); the real test files come in M1 item 3.
+
+**Noticed, not fixed (out of scope):** on the phone the "Start lot (−$1,000)" button wraps between "(−" and "$1,000)". It was like this before this change (checked against the previous version). Small CSS fix, maybe in the screenshots item (M1 item 6).
+
+**Behavior notes for David:**
+- "Start over" on a `?seed=` link replays that same seed. Without `?seed=`, "Start over" gets a new clock seed.
+- Same seed → same run holds exactly for the bot. In hand play, moving an etch slider still uses random numbers (fixed in item 2), and the live clock steps unevenly (a possible later item).
+
+#### The approved plan (kept for reference)
 
 **Goal.** Every random number in the game comes from one generator that starts from a seed. Same seed + same player actions → same run. The seed is saved with the game and shown on screen. No change to how the game plays or to any physics equation.
 
