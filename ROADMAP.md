@@ -52,6 +52,7 @@ Current milestone: **M1 — Seeded RNG and test harness**
 - [ ] Publish and share the link
 
 ## Later
+- Fab realism fixes from the 2026-10-22 playtest (David agreed; details in `tasks/todo.md`): litho focus should drive CD and process window, not overlay; allow strip-and-regrow rework for the first oxide; Deal-Grove A and B constants (with M1 item 4); SPC control limits and a spread chart; a "barrier/seed assumed" note before copper plating; analyzer drift should show as beam current or species, not energy
 - BEOL and MEMS starting-fab unlocks; QubitFab (superconducting flip-chip route, aluminum base metal)
 - Ascension levels
 - Split the script into `game.js` if the file gets unwieldy

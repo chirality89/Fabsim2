@@ -2,6 +2,59 @@
 
 ## Current: M1 — Seeded RNG and test harness
 
+### Task: M1 item 2 — take random noise out of PHYSICS.ETCH and PHYSICS.CMP (PLAN, waiting for David's OK)
+
+**Goal.** Every PHYSICS function becomes a plain calculation: same recipe in, same numbers out, and no random draws inside it. The noise these two functions use today is drawn by the caller and handed in. No equation changes and no change to how the game plays.
+
+**Why.** Today, opening the etcher panel uses up random numbers, because the prediction calls `PHYSICS.ETCH` and that calls `gauss()`. So the same seed can play out differently depending on how often you look at a panel. P1 showed this in the playtest: open the etcher panel 6 times on seed 1111 and the furnace gets a different fault. It also breaks the rule that drawing the screen never changes the game. The bot (item 5) and the daily seed (M6) need a run that depends only on the seed and the player's decisions.
+
+**Where the randomness is today** (found in the code):
+
+| Where | Line | What it does | Used by the prediction? |
+|---|---|---|---|
+| `PHYSICS.ETCH` | 480 | `depth = rate × time / 10 + gauss() × jitter`. RF jitter: one draw per lot, made **even when there is no fault** (jitter = 0) | **Yes**: every time the etcher panel draws or a slider moves |
+| `PHYSICS.CMP` | 526 | Per-wafer removal scatter: `removed = RR × time × (1 + gauss() × scatter)`, one draw per wafer, 25 per lot | No: the prediction has no lot, so it skips the draw |
+
+Only one place calls PHYSICS with a real lot: `finishRun` (line 664), when a tool finishes. The panel's prediction (`predHtml`, line 1089) is the only other call.
+
+**Steps:**
+
+1. **RULES, `finishRun`** (about 4 lines): just before it calls PHYSICS, draw the noise and put it in the `ctx` object that already goes in:
+   - ETCH: one standard-normal number, `ctx.rfNoise = gauss()`
+   - CMP: 25 standard-normal numbers, one per wafer, `ctx.waferNoise`
+   - Draw them in the same order and the same number of times as today, including the ETCH draw when there's no fault. That keeps every existing seed giving exactly the same run, which is how I'll prove nothing else changed.
+2. **PHYSICS.ETCH** (1 line): `gauss() * jitter` becomes `(ctx && ctx.rfNoise || 0) * jitter`. No noise passed in (the prediction) means 0, which is what the prediction already shows when the tool is healthy.
+3. **PHYSICS.CMP** (1 line): `gauss() * scatter` becomes `ctx.waferNoise[w] * scatter`. The lot-only check stays as it is.
+4. **Comments:** each function's comment says which inputs carry the noise, what units they are (standard-normal, no units; jitter is in nm, scatter is a fraction of removal), and that the caller draws them.
+5. **Docs:** update CLAUDE.md §5 and §7, which list these two functions as the "known exceptions". **I'll ask before editing CLAUDE.md**, since it's your rulebook. The same edit could fix the `SAVE_KEY` name (it says `'fabsim-v3'`; the code says `'fabsim-v4'`).
+
+This touches PHYSICS and RULES (2 numbered sections), about 10 lines in all. CLAUDE.md asks me to check before touching more than one section, so this plan is that check.
+
+**No save change.** The shape of `s` doesn't change, so `SAVE_KEY` stays `'fabsim-v4'` and saved games keep working.
+
+**Acceptance criteria:**
+- [ ] `gauss` and `rand` appear nowhere inside the PHYSICS section
+- [ ] **Same seed, same run as before the change:** the scratch bot on seeds 1111, 3333 and 12345 gives exactly the same ledger, cash, fault history and random-generator state after one shift, before and after
+- [ ] **Looking doesn't change the run:** seed 1111, open the etcher panel 6 times and move each slider, then run 600 min. The result matches the run where the panel was never opened (this failed in the playtest)
+- [ ] Calling `PHYSICS.ETCH` and `PHYSICS.CMP` 100 times with the same inputs gives the same answer every time, and the generator state doesn't move
+- [ ] With an RF fault, the etch depth spread still grows the way it did (same numbers for the same seed); with a slurry fault, CMP residue scatter still grows
+- [ ] No console errors; screenshots of the etcher panel at desktop and phone sizes look unchanged
+- [ ] `physics-reviewer` pass: the equations are unchanged and the units are documented
+
+**Not in this item:** Playwright in the repo (item 3). Until then the checks run from a throwaway script outside the repo, as in item 1. Also not here: P1's bug where a qual wafer on a drifting tool sends it down (B1), and making hand play repeat exactly (the uneven real-time clock).
+
+**Question for David:** OK to update CLAUDE.md §5 and §7 (and the `SAVE_KEY` name in §0) once this is done?
+
+### Task: small fix — ILD trench etch default recipe (PLAN, waiting for David's OK)
+
+David confirmed the out-of-spec default is a rounding error, not a trap.
+
+- **Cause:** both etch layers use the same default etch time, 68 s (`PARAMS.etime.def`). 68 s is right for the silicon trench (285.6 nm against a 285 nm target). The ILD trench etches 0.8× as fast, so 68 s gives 228.5 nm against a 230–270 nm spec with a 250 nm target.
+- **Fix (CONFIG only, about 3 lines):** let a route step override a recipe default, the same way it can already override a spec. Give the ILD trench step `recipe:{etime:74}`, which gives 248.6 nm, inside spec and 1.4 nm under target. `newGame` and the "Reset to baseline" button both pick up the override. No physics change.
+- **Effect on saves:** recipes are saved per game, so a game in progress keeps its 68 s until the player presses Reset to baseline. New games get 74 s. No `SAVE_KEY` bump needed.
+- **Acceptance:** a new game's ILD trench prediction shows about 249 nm in green; the silicon trench is unchanged at 286 nm; Reset to baseline on each etch layer restores its own default.
+- **Question:** do this on its own (one small commit), or together with M1 item 2? Doing it separately keeps item 2's "same seed, same run" check clean, so that's my suggestion.
+
 ### Task: M1 item 1 — one seeded random generator (DONE 2026-10-22)
 
 David approved the plan as written, with all three proposals: seed from the clock or `?seed=`; old saves start over once; seed shown in the top bar.
@@ -102,7 +155,7 @@ Three AI playtesters drove the real page in headless Chromium (Playwright), clic
    - P2's bot: **accepting every metrology result unread beat reworking or scrapping out-of-spec samples by about $7k per shift.** Starting no lots at all came within about $9k of the best plan, because the starting lots and hot lots are free.
    - Yield is flat inside spec (`metricFactor` returns 1 for any in-spec value), so centering a recipe does nothing. The shift report's "tighten recipes toward target" advice is therefore not true today (P1).
    - Planned fix: M2 (lose conditions, `customerTrust`). Shipping bad wafers and ignoring hot lots need a cost, or "accept everything" stays the best plan.
-2. **The default ILD trench etch recipe predicts out of spec.** 68 s gives 228.5 nm against the 230 nm lower limit; the prediction shows red from the start (P1, P2). **David: is this a deliberate trap?** If so, say so in How to play; if not, change the default in `ROUTE`.
+2. **The default ILD trench etch recipe predicts out of spec.** 68 s gives 228.5 nm against the 230 nm lower limit; the prediction shows red from the start (P1, P2). **David (2026-10-22): not a trap, a rounding error.** Cause: both etch layers share one default etch time (68 s), which was tuned for the silicon trench (285.6 nm against a 285 nm target). The ILD trench etches 0.8× as fast and needs about 74.4 s for its 250 nm target. Fix planned below as a small item.
 3. **The copper residue reading always shows yellow, even at 0.0 nm.** The guard band (0.12 × 2 × 30 = 7.2 nm) is wider than the 5 nm spec, so nothing can read green (P1, P2; `judge()`). The residue chart's 0–35 nm scale also squashes all points at the bottom (P1).
 4. **Toasts cover dialog buttons.** The toast layer sits above dialogs (z-index 30 vs 20). Clicks still go through, but Accept / Rework / Scrap, the shift report's Start shift button and the side-panel charts get hidden, mostly on phone and short windows (P1, P2, P3).
 5. **Phone top bar:** "Start lot (−$1,000)" wraps between "(−" and "$1,000)", and "2×" is clipped (P1, P2, P3). Already noted under M1 item 1.
@@ -127,13 +180,15 @@ Three AI playtesters drove the real page in headless Chromium (Playwright), clic
 
 Also noted, not bugs: the save in localStorage shows the hidden fault and true wafer values (devtools cheating only, P2). Seed hunting works: on seed 358 the first drift starts at 944 min, against a median of 222 min over seeds 1–2000 (P2). What held up: double-clicks don't double-count, same seed repeats exactly, reload mid-dialog restores safely (P2).
 
-### Fab realism (P1). David to rule on each; nothing changed
+### Fab realism (P1). David agreed with all of these (2026-10-22); logged for later, nothing changed
+
+Each one changes PHYSICS or a locked rule, so each gets its own plan, David's textbook values and a `physics-reviewer` pass. Also listed under "Later" in `ROADMAP.md`. The Deal-Grove constants fit M1 item 4 (physics checks).
 
 | What the game does | What a real fab does | P1's severity | Where |
 |---|---|---|---|
 | Focus error drives overlay (`overlay = |focus| × 180`) | Defocus hurts CD and process window (Bossung); overlay comes from stage, alignment, lens distortion | Eye-roll | `PHYSICS.LITHO` |
 | Oxidation can never be reworked | A pad/first oxide on bare silicon is routinely HF-stripped and regrown; "no rework" fits gate oxide or after patterning | Eye-roll | `reworkRule` 'OX' |
-| Deal-Grove: 1000 °C, 12 min gives 54 nm; A ≈ 0.165 µm; only B has the Arrhenius term (1.23 eV, the dry-B value) | Textbook dry O₂ gives about 20–25 nm (A ≈ 0.0165 µm); B/A has its own activation energy | Misleading if labelled Deal-Grove | `PHYSICS.OX`. **Needs David's textbook values (M1 item 4)** |
+| Deal-Grove: 1000 °C, 12 min gives 54 nm; the game uses A = 0.0165 µm (fixed, no temperature dependence) and B = 0.00027 µm²/min; only B has the Arrhenius term (1.23 eV, the dry-B value) | Textbook dry O₂ at 1000 °C: A ≈ 0.165 µm (10× the game's), B ≈ 0.0117 µm²/h, giving about 20–25 nm; B/A has its own activation energy | Misleading if labelled Deal-Grove | `PHYSICS.OX`. **Needs David's textbook values (M1 item 4)** |
 | SPC charts show spec limits only, means only | X̄/R or X̄/S charts with control limits; spread faults show on the R/S chart | Misleading | `spcSvg` |
 | Copper plating straight onto the dielectric | Barrier/seed deposition first | Eye-roll; a one-line "barrier/seed assumed" note would do | `ROUTE` |
 | Analyzer magnet drift raises implant energy | Energy is set by the acceleration voltage; analyzer drift shows as beam current or species | Mild eye-roll | `PHYSICS.IMP` |

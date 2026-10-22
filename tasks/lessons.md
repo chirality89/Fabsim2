@@ -52,3 +52,15 @@ That preset name doesn't exist in this Playwright version. The lookup returned n
 ### Rule to Prevent
 ✅ Give phone screenshots an explicit size: `viewport: {width: 375, height: 812}, isMobile: true, hasTouch: true`
 ✅ Check every screenshot's pixel size before judging it (375 px wide at 2× = 750 px)
+
+## Copied a playtester's number backwards
+
+### What Happened
+When combining the 2026-10-22 playtest reports into `tasks/todo.md`, the Deal-Grove row said the game uses A ≈ 0.165 µm and the textbook value is 0.0165 µm. It is the other way round: the code has A = 0.0165 µm and the textbook dry-oxide value at 1000 °C is about 0.165 µm.
+
+### Root Cause
+The playtester's sentence ("A≈0.165 µm here vs 0.0165 µm in the game") was ambiguous, and the numbers were copied without checking them against `index.html`.
+
+### Rule to Prevent
+✅ Before logging any number from an agent report, check it against the code (grep the constant)
+✅ In realism notes, always label which value is the game's and which is the textbook's
