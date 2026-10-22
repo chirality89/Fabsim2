@@ -5,7 +5,7 @@ Work top to bottom, one checkbox per session. Plan in `tasks/todo.md` first (see
 Current milestone: **M0 — Move in**
 
 ## M0 — Move in (week 1)
-- [ ] Put `index.html` and the kit in a new GitHub repo; turn on GitHub Pages; confirm the live URL loads and plays on a phone
+- [x] Put `index.html` and the kit in a new GitHub repo; turn on GitHub Pages; confirm the live URL loads and plays on a phone
 - [ ] Play 2–3 shifts by hand and write down anything that feels wrong or unclear in `tasks/todo.md`
 - [ ] Run a first headless check: load the page, run one simulated shift with a simple bot, confirm no errors
 
